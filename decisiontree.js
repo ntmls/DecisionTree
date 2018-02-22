@@ -1,11 +1,34 @@
 (function(window) {
     
+    var getAttributes = function(data) {
+        var names = Object.getOwnPropertyNames(data[0]);
+        var len = data.length;
+        var categoricalThreshold;
+        return names.map(function(x) {
+            var values = getDistinctValues(data, x);
+            var isCat = (values.length < len / 3);
+            var isNumeric = (values.filter(function(x) {
+                return isFinite(x.value);
+            }).length == values.length);
+            return {
+                name: x,
+                uniqueValues: values.length,
+                isCategorical: isCat,
+                isNumeric: isNumeric
+            };
+        });
+    };
+    
+    var removeAttribute = function(attributes, attribute) {
+        return attributes.filter(function(x) { return x.name != attribute; });
+    };
+    
     function DecisionTree(data, className) {
         //this.data = data;
         this.attributes = removeAttribute(getAttributes(data), className);
         this.className = className;
         this.classValues = getDistinctValues(data, className);
-        this.root = new DecisionTreeNode(data, this.attributes, className, '', '');
+        this.root = new DecisionTreeNode(data, this.attributes, className, 0);
     };
     
     var sum = function(xs) {
@@ -13,6 +36,15 @@
             return a + b;              
         }, 0);
     }; 
+    
+    var getMean = function(data, attributeName) {
+        let total = 0;
+        let len = data.length;
+        for(let i = 0; i < len; i++) {
+            total += parseFloat(data[i][attributeName]);
+        }
+        return total / len;
+    };
     
     var calcGini = function(data, className) {
         var classValues = getDistinctValues(data, className);
@@ -23,87 +55,113 @@
         });
         return 1 - sum(probsSquared);
     };
+
+    var equalsPredicate = function(attributeName, value) {
+        return function(row) {
+            return row[attributeName] == value;
+        };
+    };
     
-    function DecisionTreeNode(data, attributes, className, attributeName, valueName) {
+    var lessThanPredicate = function(attributeName, value) {
+        return function(row) {
+            return row[attributeName] < value;
+        };
+    };
+    
+    var split = function(data, predicate, description, className, parentGini) {
+        let left = [],
+            right = [],
+            len = data.length;
+        
+        for (let i = 0; i < len; i++) {
+            if (predicate(data[i])) {
+                left.push(data[i]);
+            } else {
+                right.push(data[i]);
+            }
+        }
+        let lgini = calcGini(left, className);
+        let rgini = calcGini(right, className);
+        let gini = (left.length / len) * lgini + (right.length / len) * rgini;
+        return {
+            label: description,
+            gini: gini,
+            gain: parentGini - gini,
+            left: left,
+            right: right
+        };
+    };
+    
+    var getPartitions = function(data, attributes, className, parentGini) {
+        var partitions = [];
+        let alen = attributes.length;
+        for (let i = 0; i < alen; i++) {
+            let attribute = attributes[i];
+            if (attribute.isCategorical) {
+               let values = getDistinctValues(data, attribute.name);
+                let vlen = values.length;
+                if (vlen > 1) {                         // only partition if therr is more than one value
+                    for (let j = 0; j < vlen; j++) {
+                        let value = values[j];
+                        let predicate = equalsPredicate(attribute.name, value.value);
+                        let description = attribute.name + ' = ' + value.value;
+                        let partition = split(data, predicate, description, className, parentGini);
+                        partitions.push(partition);
+                    }
+                }
+            } else if (attribute.isNumeric) {
+                let mean = getMean(data, attribute.name);
+                let predicate = lessThanPredicate(attribute.name, mean);
+                let description = attribute.name + ' < ' + mean;
+                let partition = split(data, predicate, description, className, parentGini);
+                partitions.push(partition);
+            }
+        }
+        return partitions;
+        
+    };
+    
+    // Find the split with the maximium gain. 
+    // If there is a tie break it by picking at random.
+    var getMaxGain = function(splits) {
+        let len = splits.length;
+        let maxSplit = splits[0];
+        for(let i = 1; i < len; i++) {
+            if (splits[i].gain > maxSplit.gain) {
+                maxSplit = splits[i]; 
+            } else if(splits[i].gain == maxSplit.gain) {
+                if(Math.random() > .5) {
+                    maxSplit = splits[i];
+                }
+            }
+        }
+        return maxSplit;
+    };
+    
+    function DecisionTreeNode(data, attributes, className, depth) {
+        if (depth === undefined) { 
+            this.depth = 0;
+        } else {
+            this.depth = depth;
+        }
         this.data = data;
         var _recordCount = data.length;
         this.recordCount = _recordCount;
         this.attributes = attributes;
-        this.attributeName = attributeName;
-        this.valueName = valueName;
         this.gini = calcGini(data, className);
-        this.splits = partitionOnAttributes(data, this.attributes);
         this.children = [];
         
-        let maxGain = 0;
-        let maxAttribute = undefined;
-        let alen = attributes.length;
-        for(let i = 0; i < alen; i++) {
-            let attribute = this.splits[i];
-            let vlen = attribute.values.length;
-            let avgGini = 0;
-            for(let j = 0; j < vlen; j++) {
-                let value = attribute.values[j];
-                let weight = value.data.length / _recordCount;
-                let gini = calcGini(value.data, className);
-                avgGini = avgGini + gini * weight;
-            }
-            let gain = this.gini - avgGini;
-            if (gain > maxGain) {
-                maxGain = gain;
-                maxAttribute = attribute;
+        let values = getDistinctValues(data, className); 
+        if (values.length > 1) {    // should we stop recursion?
+            let splits = getPartitions(data, this.attributes, className, this.gini);
+            if (splits.length > 0) {
+                let split = getMaxGain(splits); 
+                this.label = split.label;
+                this.children.push(new DecisionTreeNode(split.left, attributes, className, this.depth + 1));
+                this.children.push(new DecisionTreeNode(split.right, attributes, className, this.depth + 1));   
             }
         }
-        
-        if (maxAttribute !== undefined) {            
-            this.children = maxAttribute.values.map(function(x) { 
-                return new DecisionTreeNode(
-                    x.data, 
-                    removeAttribute(attributes, maxAttribute.attribute),
-                    className,
-                    maxAttribute.attribute,
-                    x.valueName);
-            });
-        }
-        
     }; 
-    
-    var partitionOnValues = function (data, attribute) {
-        
-        // get values for the atribute
-        var values = getDistinctValues(data, attribute); 
-        
-        // initialize the value map
-        var valueMap = [];
-        var vlen = values.length;
-        for (let i = 0; i < vlen; i++) {
-            valueMap[values[i].value] = [];    
-        }
-        
-        // divide up the records
-        var dlen = data.length;
-        for (let i = 0; i < dlen; i++) {
-            valueMap[data[i][attribute]].push(data[i]);
-        }
-        
-        // return an array of data rows
-        return values.map(function(x) { 
-            return {
-                valueName: x.value,
-                data: valueMap[x.value] 
-            };
-        });
-        
-    };
-    
-    var partitionOnAttributes = function(data, attributes) {
-        return attributes.map(function(x) {
-            return {
-                attribute: x,
-                values: partitionOnValues(data, x)
-            };
-        });
-    };
     
     var getDistinctValues = function(data, columnName) {
         let values = [];
@@ -120,14 +178,6 @@
         }
         return values.map(function(x) { return { value: x, count: valueMap[x] }; });
     }
-    
-    var getAttributes = function(data) {
-        return Object.getOwnPropertyNames(data[0]);
-    };
-    
-    var removeAttribute = function(attributes, attribute) {
-        return attributes.filter(function(x) { return x != attribute; });
-    };
     
     var jsonToTree = function(json, className) {
         var dt = new DecisionTree(json, className); 
