@@ -151,16 +151,28 @@
         this.gini = calcGini(data, className);
         this.children = [];
         
-        let values = getDistinctValues(data, className); 
+        let values = getDistinctValues(data, className);
+        this.values = values;
+        
+        let shouldStop = true;
         if (values.length > 1) {    // should we stop recursion?
-            let splits = getPartitions(data, this.attributes, className, this.gini);
+            var splits = getPartitions(data, this.attributes, className, this.gini);
             if (splits.length > 0) {
-                let split = getMaxGain(splits); 
-                this.label = split.label;
-                this.children.push(new DecisionTreeNode(split.left, attributes, className, this.depth + 1));
-                this.children.push(new DecisionTreeNode(split.right, attributes, className, this.depth + 1));   
+                shouldStop = false;
             }
         }
+        
+        if (shouldStop) {
+            this.label = values.map(function(x) {
+                return x.value + ' (' + x.count + ')';
+            }).join('\t');
+        } else {
+            let split = getMaxGain(splits); 
+            this.label = split.label;
+            this.children.push(new DecisionTreeNode(split.left, attributes, className, this.depth + 1));
+            this.children.push(new DecisionTreeNode(split.right, attributes, className, this.depth + 1));   
+        }
+        
     }; 
     
     var getDistinctValues = function(data, columnName) {
