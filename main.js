@@ -3,7 +3,6 @@ var Promise = require('promise');
 var fs = require('fs');
 var DT = require('./decisiontree');
 
-
 var readFile = function(fileName) {
     return new Promise(function(resolve, reject) {
         fs.readFile(fileName, 'utf8', function(error, data) {
@@ -30,7 +29,6 @@ var jsonToDecisionTree = function(json) {
 };
 
 var displayTree = function(tree) {
-    console.log('toda');
     displayNode(tree.root, 'root', '');
     return tree;
 };
