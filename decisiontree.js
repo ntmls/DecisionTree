@@ -23,12 +23,11 @@
         return attributes.filter(function(x) { return x.name != attribute; });
     };
     
-    function DecisionTree(data, className) {
-        //this.data = data;
+    function LearnerTree(data, className) {
         this.attributes = removeAttribute(getAttributes(data), className);
         this.className = className;
         this.classValues = getDistinctValues(data, className);
-        this.root = new DecisionTreeNode(data, this.attributes, className, 0);
+        this.root = new DTLearnerNode(data, this.attributes, className, 0);
     };
     
     var sum = function(xs) {
@@ -138,7 +137,7 @@
         return maxSplit;
     };
     
-    function DecisionTreeNode(data, attributes, className, depth) {
+    function DTLearnerNode(data, attributes, className, depth) {
         if (depth === undefined) { 
             this.depth = 0;
         } else {
@@ -169,8 +168,8 @@
         } else {
             let split = getMaxGain(splits); 
             this.label = split.label;
-            this.children.push(new DecisionTreeNode(split.left, attributes, className, this.depth + 1));
-            this.children.push(new DecisionTreeNode(split.right, attributes, className, this.depth + 1));   
+            this.children.push(new DTLearnerNode(split.left, attributes, className, this.depth + 1));
+            this.children.push(new DTLearnerNode(split.right, attributes, className, this.depth + 1));   
         }
         
     }; 
@@ -192,7 +191,7 @@
     }
     
     var jsonToTree = function(json, className) {
-        var dt = new DecisionTree(json, className); 
+        var dt = new LearnerTree(json, className); 
         return dt;
     }; 
     
