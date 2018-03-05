@@ -1,5 +1,21 @@
 (function(window) {
     
+    var getDistinctValues = function(data, columnName) {
+        let values = [];
+        let valueMap = [];
+        let len = data.length;
+        for(let i = 0; i < data.length; i++) {
+            let value = data[i][columnName]; 
+            if (valueMap[value] === undefined) {
+                valueMap[value] = 1;
+                values.push(value);
+            } else {
+                valueMap[value] += 1;
+            }
+        }
+        return values.map(function(x) { return { value: x, count: valueMap[x] }; });
+    }
+
     var getAttributes = function(data) {
         var names = Object.getOwnPropertyNames(data[0]);
         var len = data.length;
@@ -21,13 +37,6 @@
     
     var removeAttribute = function(attributes, attribute) {
         return attributes.filter(function(x) { return x.name != attribute; });
-    };
-    
-    function LearnerTree(data, className) {
-        this.attributes = removeAttribute(getAttributes(data), className);
-        this.className = className;
-        this.classValues = getDistinctValues(data, className);
-        this.root = new DTLearnerNode(data, this.attributes, className, 0);
     };
     
     var sum = function(xs) {
@@ -67,10 +76,20 @@
         };
     };
     
-    var split = function(data, predicate, description, className, parentGini) {
+    var split = function(data, splitType, attributeName, value, className, parentGini) {
         let left = [],
             right = [],
-            len = data.length;
+            len = data.length, 
+            predicate;
+        
+        switch (splitType) {
+            case 'equals':
+                predicate = equalsPredicate(attributeName, value);
+                break;
+            case 'less-than':
+                predicate = lessThanPredicate(attributeName, value);
+                break;
+        }
         
         for (let i = 0; i < len; i++) {
             if (predicate(data[i])) {
@@ -82,8 +101,11 @@
         let lgini = calcGini(left, className);
         let rgini = calcGini(right, className);
         let gini = (left.length / len) * lgini + (right.length / len) * rgini;
+        
         return {
-            label: description,
+            attributeName: attributeName,
+            value: value,
+            splitType: splitType,
             gini: gini,
             gain: parentGini - gini,
             left: left,
@@ -102,17 +124,13 @@
                 if (vlen > 1) {                         // only partition if therr is more than one value
                     for (let j = 0; j < vlen; j++) {
                         let value = values[j];
-                        let predicate = equalsPredicate(attribute.name, value.value);
-                        let description = attribute.name + ' = ' + value.value;
-                        let partition = split(data, predicate, description, className, parentGini);
+                        let partition = split(data, 'equals', attribute.name, value.value, className, parentGini);
                         partitions.push(partition);
                     }
                 }
             } else if (attribute.isNumeric) {
                 let mean = getMean(data, attribute.name);
-                let predicate = lessThanPredicate(attribute.name, mean);
-                let description = attribute.name + ' < ' + mean;
-                let partition = split(data, predicate, description, className, parentGini);
+                let partition = split(data, 'less-than', attribute.name, mean, className, parentGini);
                 partitions.push(partition);
             }
         }
@@ -137,62 +155,60 @@
         return maxSplit;
     };
     
-    function DTLearnerNode(data, attributes, className, depth) {
+    var buildNodeFromData = function(data, attributes, className, depth) {
         if (depth === undefined) { 
-            this.depth = 0;
-        } else {
-            this.depth = depth;
+            depth = 0;
         }
-        this.data = data;
-        var _recordCount = data.length;
-        this.recordCount = _recordCount;
-        this.attributes = attributes;
-        this.gini = calcGini(data, className);
-        this.children = [];
-        
+        let recordCount = data.length;
+        let gini = calcGini(data, className);
+        let left = {};
+        let right = {};
         let values = getDistinctValues(data, className);
-        this.values = values;
-        
+        let label = '';
+
         let shouldStop = true;
         if (values.length > 1) {    // should we stop recursion?
-            var splits = getPartitions(data, this.attributes, className, this.gini);
+            var splits = getPartitions(data, attributes, className, gini);
             if (splits.length > 0) {
                 shouldStop = false;
             }
         }
         
         if (shouldStop) {
-            this.label = values.map(function(x) {
+            label = values.map(function(x) {
                 return x.value + ' (' + x.count + ')';
             }).join('\t');
+            return {
+                label: label,
+                attributeName: null,
+                splitValue: null,
+                splitType: 'none',
+                hasChildren: false,
+                left: null,
+                right: null, 
+                values: values
+            };
         } else {
             let split = getMaxGain(splits); 
-            this.label = split.label;
-            this.children.push(new DTLearnerNode(split.left, attributes, className, this.depth + 1));
-            this.children.push(new DTLearnerNode(split.right, attributes, className, this.depth + 1));   
+            label = split.label;
+            left = buildNodeFromData(split.left, attributes, className, this.depth + 1);
+            right = buildNodeFromData(split.right, attributes, className, this.depth + 1);  
+            return {
+                label: split.attributeName + ' ' + split.splitType + ' ' + split.value,
+                attributeName: split.attributeName,
+                splitValue: split.value,
+                splitType: split.splitType,
+                hasChildren: !shouldStop,
+                left: left,
+                right: right,
+                values: []
+            };
         }
-        
     }; 
-    
-    var getDistinctValues = function(data, columnName) {
-        let values = [];
-        let valueMap = [];
-        let len = data.length;
-        for(let i = 0; i < data.length; i++) {
-            let value = data[i][columnName]; 
-            if (valueMap[value] === undefined) {
-                valueMap[value] = 1;
-                values.push(value);
-            } else {
-                valueMap[value] += 1;
-            }
-        }
-        return values.map(function(x) { return { value: x, count: valueMap[x] }; });
-    }
-    
-    var jsonToTree = function(json, className) {
-        var dt = new LearnerTree(json, className); 
-        return dt;
+
+    var jsonToTree = function(data, className) {
+        var attributes = removeAttribute(getAttributes(data), className);
+        return buildNodeFromData(data, attributes, className, 0);
     }; 
     
     var exports = {

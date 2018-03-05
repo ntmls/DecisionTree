@@ -29,15 +29,14 @@ var jsonToDecisionTree = function(json) {
 };
 
 var displayTree = function(tree) {
-    displayNode(tree.root, 'root', '');
+    displayNode(tree, 'root', '');
     return tree;
 };
 
 var displayNode = function (node, type, prefix)  {
     let newPrefix = ' ';
-    let hasChildren = node.children.length > 0;
     var branchChar;
-    if (hasChildren) {
+    if (node.hasChildren) {
         branchChar = '\u2533';
     } else {
         branchChar = '\u2501';
@@ -56,10 +55,15 @@ var displayNode = function (node, type, prefix)  {
             newPrefix = prefix + '  ';
             break;
     }        
-    for(let i = 0; i<node.children.length; i++) {
+    if (node.hasChildren) {
         displayNode(
-            node.children[i], 
-            (i == 0 ? 'left' : 'right'), 
+            node.left, 
+            'left', 
+            newPrefix
+        );
+        displayNode(
+            node.right,
+            'right', 
             newPrefix
         );
     }
@@ -68,6 +72,6 @@ var displayNode = function (node, type, prefix)  {
 readFile('weather.csv')
     .then(csvToJson)
     .then(jsonToDecisionTree)
-    // .then(logValue)
+    .then(logValue)
     .then(displayTree)
     .catch(logValue);
