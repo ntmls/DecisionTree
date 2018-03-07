@@ -29,7 +29,7 @@ var jsonToDecisionTree = function(json) {
 };
 
 var displayTree = function(tree) {
-    displayNode(tree, 'root', '');
+    displayNode(tree.root, 'root', '');
     return tree;
 };
 

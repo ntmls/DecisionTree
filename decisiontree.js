@@ -180,12 +180,8 @@
             }).join('\t');
             return {
                 label: label,
-                attributeName: null,
-                splitValue: null,
-                splitType: 'none',
-                hasChildren: false,
-                left: null,
-                right: null, 
+                splitType: 'leaf',
+                hasChildren: false, 
                 values: values
             };
         } else {
@@ -200,15 +196,23 @@
                 splitType: split.splitType,
                 hasChildren: !shouldStop,
                 left: left,
-                right: right,
-                values: []
+                right: right
             };
         }
     }; 
 
     var jsonToTree = function(data, className) {
-        var attributes = removeAttribute(getAttributes(data), className);
-        return buildNodeFromData(data, attributes, className, 0);
+        var allAttributes = getAttributes(data)
+        var attributes = removeAttribute(allAttributes, className);
+        var _class = allAttributes.filter(function(x) { 
+            return x.name == className;
+        })[0];
+        return {
+            attributes: attributes,
+            class: _class,
+            class: _class,
+            root: buildNodeFromData(data, attributes, className, 0)
+        };
     }; 
     
     var exports = {
