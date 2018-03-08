@@ -155,6 +155,19 @@
         return maxSplit;
     };
     
+    /*
+    var argMax = function(ar, f) {
+        var len = ar.length; 
+        var result = ar[0]
+        for (let i=0; i<len; i++) {
+            if (f(result) > f(ar[i])){
+                result = ar[i];    
+            }
+        }
+        return result;
+    };
+    */
+    
     var buildNodeFromData = function(data, attributes, className, depth) {
         if (depth === undefined) { 
             depth = 0;
@@ -175,14 +188,26 @@
         }
         
         if (shouldStop) {
+            values = values.sort(function(a,b) {
+                return a - b; 
+            });
+            let sum = values.reduce(function(a, b) {
+                return a + b.count; 
+            }, 0);
             label = values.map(function(x) {
                 return x.value + ' (' + x.count + ')';
             }).join('\t');
+            let temp = values.map(function(x) {
+                return {
+                    value: x.value, 
+                    probability: x.count / sum
+                };
+            });
             return {
                 label: label,
                 splitType: 'leaf',
-                hasChildren: false, 
-                values: values
+                hasChildren: false,
+                values: temp
             };
         } else {
             let split = getMaxGain(splits); 
@@ -208,15 +233,39 @@
             return x.name == className;
         })[0];
         return {
-            attributes: attributes,
-            class: _class,
             class: _class,
             root: buildNodeFromData(data, attributes, className, 0)
         };
     }; 
     
+    var evalNode = function(node) {
+        if (!node.hasChildren) {
+            return node.values;
+        }
+        if (node.predicate === undefined) {
+            switch (node.splitType) {
+                case 'equals':
+                    node.predicate = equalsPredicate;
+                    break;
+                case 'less-than':
+                    node.predicate = lessThanPredicate;
+                    break;
+            };    
+        }
+        if (node.predicate(node.attributeName, node.value)) {
+            return evalNode(node.left);
+        } else {
+            return evalNode(node.right);
+        }
+    };
+    
+    var evalTree = function(tree, object) {
+        return evalNode(tree.root, object);  
+    };
+    
     var exports = {
-        jsonToTree: jsonToTree
+        jsonToTree: jsonToTree, 
+        evalTree: evalTree
     };
     
     if (typeof module === 'undefined') {

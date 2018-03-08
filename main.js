@@ -69,9 +69,17 @@ var displayNode = function (node, type, prefix)  {
     }
 };
 
+var testEval = function(tree) {
+    return DT.evalTree(tree, {
+        Outlook: 'overcast' 
+    });
+}; 
+
 readFile('weather.csv')
     .then(csvToJson)
     .then(jsonToDecisionTree)
     .then(logValue)
     .then(displayTree)
+    .then(testEval)
+    .then(logValue)
     .catch(logValue);
