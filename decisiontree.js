@@ -165,7 +165,7 @@
         return maxSplit;
     };
     
-    var buildNodeFromData = function(data, attributes, className, depth) {
+    var buildNodeFromData = function(data, columns, className, maxDepth, depth) {
         if (depth === undefined) { 
             depth = 0;
         }
@@ -176,8 +176,10 @@
         let values = getDistinctValues(data, className);
 
         let shouldStop = true;
-        if (values.length > 1) {    // should we stop recursion?
-            var splits = getPartitions(data, attributes, className, gini);
+        if (maxDepth !== undefined && depth >= maxDepth) { 
+            shouldStop = true; 
+        } else if (values.length > 1) {    
+            var splits = getPartitions(data, columns, className, gini);
             if (splits.length > 0) {
                 shouldStop = false;
             }
@@ -185,7 +187,7 @@
         
         if (shouldStop) {
             values = values.sort(function(a,b) {
-                return a - b; 
+                return b.count - a.count; 
             });
             let sum = values.reduce(function(a, b) {
                 return a + b.count; 
@@ -203,8 +205,8 @@
             };
         } else {
             let split = getMaxGain(splits); 
-            left = buildNodeFromData(split.left, attributes, className, this.depth + 1);
-            right = buildNodeFromData(split.right, attributes, className, this.depth + 1);  
+            left = buildNodeFromData(split.left, columns, className, maxDepth, depth + 1);
+            right = buildNodeFromData(split.right, columns, className, maxDepth, depth + 1);  
             return {
                 attributeName: split.attributeName,
                 splitType: split.splitType,
@@ -216,7 +218,7 @@
         }
     }; 
     
-    var jsonToTree = function(data, columns, className) {
+    var jsonToTree = function(data, columns, className, maxDepth) {
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
         var _columns = removeColumn(columns, className);
@@ -225,7 +227,7 @@
         })[0];
         return {
             class: _class,
-            root: buildNodeFromData(data, _columns, _class.name, 0)
+            root: buildNodeFromData(data, _columns, _class.name, maxDepth, 0)
         };
     }; 
     
