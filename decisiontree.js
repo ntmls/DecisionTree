@@ -16,13 +16,13 @@
         return values.map(function(x) { return { value: x, count: valueMap[x] }; });
     }
 
-    var getAttributes = function(data) {
+    var getColumns = function(data) {
         var names = Object.getOwnPropertyNames(data[0]);
         var len = data.length;
         var categoricalThreshold;
         return names.map(function(x) {
             var values = getDistinctValues(data, x);
-            var isCat = (values.length < len / 3);
+            var isCat = (values.length < 10);
             var isNumeric = (values.filter(function(x) {
                 return isFinite(x.value);
             }).length == values.length);
@@ -35,8 +35,18 @@
         });
     };
     
-    var removeAttribute = function(attributes, attribute) {
-        return attributes.filter(function(x) { return x.name != attribute; });
+    var removeColumn = function(columns, columnName) {
+        return columns.filter(function(x) { return x.name != columnName; });
+    };
+    
+    var removeColumns = function(columns, columnNames) {
+        if (columnNames === undefined) { return columns; }
+        var result = columns;  
+        let len = columnNames.length;
+        for(let i=0; i<len; i++) {
+            result = removeColumn(result, columnNames[i]);
+        }
+        return result;
     };
     
     var sum = function(xs) {
@@ -205,20 +215,21 @@
             };
         }
     }; 
-
-    var jsonToTree = function(data, className) {
-        var allAttributes = getAttributes(data)
-        var attributes = removeAttribute(allAttributes, className);
-        var _class = allAttributes.filter(function(x) { 
+    
+    var jsonToTree = function(data, columns, className) {
+        if (columns === undefined) { throw("columns are not defined"); }
+        if (className === undefined) { throw("className is not defined"); }
+        var _columns = removeColumn(columns, className);
+        var _class = columns.filter(function(x) { 
             return x.name == className;
         })[0];
         return {
             class: _class,
-            root: buildNodeFromData(data, attributes, className, 0)
+            root: buildNodeFromData(data, _columns, _class.name, 0)
         };
     }; 
     
-    var evalNode = function(node) {
+    var evalNode = function(node, row) {
         if (!node.hasChildren) {
             return node.values;
         }
@@ -232,20 +243,22 @@
                     break;
             };    
         }
-        if (node.predicate(node.attributeName, node.value)) {
-            return evalNode(node.left);
+        if (node.predicate(node.attributeName, node.value)(row)) {
+            return evalNode(node.left, row);
         } else {
-            return evalNode(node.right);
+            return evalNode(node.right, row);
         }
     };
     
-    var evalTree = function(tree, object) {
-        return evalNode(tree.root, object);  
+    var evalTree = function(tree, row) {
+        return evalNode(tree.root, row);  
     };
     
     var exports = {
         jsonToTree: jsonToTree, 
-        evalTree: evalTree
+        evalTree: evalTree, 
+        getColumns: getColumns, 
+        removeColumns: removeColumns
     };
     
     if (typeof module === 'undefined') {

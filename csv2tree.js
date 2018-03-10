@@ -1,11 +1,11 @@
-var Papa = require('papaparse');
+var Papa =  require('papaparse');
 var Promise = require('promise');
 var minimist = require('minimist');
 var fs = require('fs');
 var DT = require('./decisiontree');
 
 var args = minimist(process.argv.slice(2), {
-    string: ['in', 'out'],
+    string: ['in', 'out', 'class', 'ignore'],
     default: {
         out: 'tree.json'
     }
@@ -48,8 +48,17 @@ var logValue = function(value) {
     return value; 
 };
 
-var jsonToDecisionTree = function(json) {
-    return DT.jsonToTree(json.data, "Play");
+var jsonToDecisionTree = function(args) {
+    var ignore = [];
+    if (args.ignore !== undefined) {
+        ignore = args.ignore.split(",");
+    }
+    return function(json) {
+        let data = json.data;
+        let columns = DT.removeColumns(DT.getColumns(data), ignore);
+        console.log(columns);
+        return DT.jsonToTree(data, columns, args.class, ignore);   
+    }
 };
 
 var displayTree = function(tree) {
@@ -114,7 +123,7 @@ var notify = function(message) {
 
 readFile(args.in)
     .then(csvToJson)
-    .then(jsonToDecisionTree)
+    .then(jsonToDecisionTree(args))
     .then(displayTree)
     .then(stringify)
     .then(writeFile(args.out))
