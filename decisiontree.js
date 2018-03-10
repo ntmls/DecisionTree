@@ -155,19 +155,6 @@
         return maxSplit;
     };
     
-    /*
-    var argMax = function(ar, f) {
-        var len = ar.length; 
-        var result = ar[0]
-        for (let i=0; i<len; i++) {
-            if (f(result) > f(ar[i])){
-                result = ar[i];    
-            }
-        }
-        return result;
-    };
-    */
-    
     var buildNodeFromData = function(data, attributes, className, depth) {
         if (depth === undefined) { 
             depth = 0;
@@ -177,7 +164,6 @@
         let left = {};
         let right = {};
         let values = getDistinctValues(data, className);
-        let label = '';
 
         let shouldStop = true;
         if (values.length > 1) {    // should we stop recursion?
@@ -194,9 +180,6 @@
             let sum = values.reduce(function(a, b) {
                 return a + b.count; 
             }, 0);
-            label = values.map(function(x) {
-                return x.value + ' (' + x.count + ')';
-            }).join('\t');
             let temp = values.map(function(x) {
                 return {
                     value: x.value, 
@@ -204,21 +187,18 @@
                 };
             });
             return {
-                label: label,
-                splitType: 'leaf',
+                splitType: 'none',
                 hasChildren: false,
                 values: temp
             };
         } else {
             let split = getMaxGain(splits); 
-            label = split.label;
             left = buildNodeFromData(split.left, attributes, className, this.depth + 1);
             right = buildNodeFromData(split.right, attributes, className, this.depth + 1);  
             return {
-                label: split.attributeName + ' ' + split.splitType + ' ' + split.value,
                 attributeName: split.attributeName,
-                splitValue: split.value,
                 splitType: split.splitType,
+                splitValue: split.value,
                 hasChildren: !shouldStop,
                 left: left,
                 right: right

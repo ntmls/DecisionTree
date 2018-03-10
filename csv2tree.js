@@ -1,7 +1,17 @@
 var Papa = require('papaparse');
 var Promise = require('promise');
+var minimist = require('minimist');
 var fs = require('fs');
 var DT = require('./decisiontree');
+
+var args = minimist(process.argv.slice(2), {
+    string: ['in', 'out'],
+    default: {
+        out: 'tree.json'
+    }
+});
+
+console.log(args);
 
 var readFile = function(fileName) {
     return new Promise(function(resolve, reject) {
@@ -13,6 +23,20 @@ var readFile = function(fileName) {
             }
         });
     });
+};
+
+var writeFile = function(filename) {
+    return function(text) {
+        return new Promise(function(resolve, reject) {
+            fs.writeFile(filename, text, function(error) {
+               if(error) {
+                   reject(error);
+               } else {
+                   resolve(text); 
+               } 
+            });             
+        });      
+    };
 };
 
 var csvToJson = function(csv) {
@@ -33,6 +57,14 @@ var displayTree = function(tree) {
     return tree;
 };
 
+var getNodeLabel = function(node) {
+    if (node.hasChildren) {
+        return node.attributeName + ' ' + node.splitType + ' ' + node.splitValue;    
+    } else {
+        return node.values[0].value + ' (' + node.values[0].probability + ')';
+    }
+};
+
 var displayNode = function (node, type, prefix)  {
     let newPrefix = ' ';
     var branchChar;
@@ -43,15 +75,15 @@ var displayNode = function (node, type, prefix)  {
     }
     switch (type) {
         case 'left':
-            console.log(prefix + '\u2523\u2501' + branchChar + 'TRUE\u2501\u2501' + node.label);
+            console.log(prefix + '\u2523\u2501' + branchChar + 'TRUE\u2501\u2501' + getNodeLabel(node));
             newPrefix = prefix + '\u2502 ';
             break;
         case 'right':
-            console.log(prefix + '\u2515\u2501' + branchChar + 'FALSE\u2501\u2501' + node.label);
+            console.log(prefix + '\u2515\u2501' + branchChar + 'FALSE\u2501\u2501' + getNodeLabel(node));
             newPrefix = prefix + '  ';
             break;
         case 'root':
-            console.log(prefix + node.label);
+            console.log(prefix + getNodeLabel(node));
             newPrefix = prefix + '  ';
             break;
     }        
@@ -69,17 +101,22 @@ var displayNode = function (node, type, prefix)  {
     }
 };
 
-var testEval = function(tree) {
-    return DT.evalTree(tree, {
-        Outlook: 'overcast' 
-    });
-}; 
+var stringify = function(tree) {
+    return JSON.stringify(tree, null, 2);
+};
 
-readFile('weather.csv')
+var notify = function(message) {
+    return function(value) {
+        console.log(message); 
+        return value;
+    };
+};
+
+readFile(args.in)
     .then(csvToJson)
     .then(jsonToDecisionTree)
-    .then(logValue)
     .then(displayTree)
-    .then(testEval)
-    .then(logValue)
+    .then(stringify)
+    .then(writeFile(args.out))
+    .then(notify('DONE'))
     .catch(logValue);
