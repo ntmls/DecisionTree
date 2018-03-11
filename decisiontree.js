@@ -55,13 +55,25 @@
         }, 0);
     }; 
     
-    var getMean = function(data, attributeName) {
+    var getStats = function(data, columnName) {
         let total = 0;
         let len = data.length;
+        var min, max;
         for(let i = 0; i < len; i++) {
-            total += parseFloat(data[i][attributeName]);
+            let value = parseFloat(data[i][columnName]);
+            total += value;
+            if (i==0) {
+                min = value;
+                max = value;
+            }
+            min = Math.min(min, value);
+            max = Math.max(max, value); 
         }
-        return total / len;
+        return {
+            mean: total / len, 
+            min: min, 
+            max: max
+        };
     };
     
     var calcGini = function(data, className) {
@@ -123,11 +135,11 @@
         };
     };
     
-    var getPartitions = function(data, attributes, className, parentGini) {
+    var getPartitions = function(data, columns, className, parentGini, options) {
         var partitions = [];
-        let alen = attributes.length;
+        let alen = columns.length;
         for (let i = 0; i < alen; i++) {
-            let attribute = attributes[i];
+            let attribute = columns[i];
             if (attribute.isCategorical) {
                let values = getDistinctValues(data, attribute.name);
                 let vlen = values.length;
@@ -139,9 +151,17 @@
                     }
                 }
             } else if (attribute.isNumeric) {
-                let mean = getMean(data, attribute.name);
-                let partition = split(data, 'less-than', attribute.name, mean, className, parentGini);
-                partitions.push(partition);
+                let stats = getStats(data, attribute.name);
+                if (options.randomize) {
+                    for(let j=0; j < options.splitCount; j++) {
+                        let r = (stats.max - stats.min) * Math.random() + stats.min; 
+                        let partition = split(data, 'less-than', attribute.name, r, className, parentGini);  
+                        partitions.push(partition);
+                    }  
+                } else {
+                    let partition = split(data, 'less-than', attribute.name, stats.mean, className, parentGini);  
+                    partitions.push(partition);
+                }
             }
         }
         return partitions;
@@ -165,10 +185,11 @@
         return maxSplit;
     };
     
-    var buildNodeFromData = function(data, columns, className, maxDepth, depth) {
+    var buildNodeFromData = function(data, columns, className, options, depth) {
         if (depth === undefined) { 
             depth = 0;
         }
+        let maxDepth = options.maxDepth;
         let recordCount = data.length;
         let gini = calcGini(data, className);
         let left = {};
@@ -179,7 +200,7 @@
         if (maxDepth !== undefined && depth >= maxDepth) { 
             shouldStop = true; 
         } else if (values.length > 1) {    
-            var splits = getPartitions(data, columns, className, gini);
+            var splits = getPartitions(data, columns, className, gini, options);
             if (splits.length > 0) {
                 shouldStop = false;
             }
@@ -205,8 +226,8 @@
             };
         } else {
             let split = getMaxGain(splits); 
-            left = buildNodeFromData(split.left, columns, className, maxDepth, depth + 1);
-            right = buildNodeFromData(split.right, columns, className, maxDepth, depth + 1);  
+            left = buildNodeFromData(split.left, columns, className, options, depth + 1);
+            right = buildNodeFromData(split.right, columns, className, options, depth + 1);  
             return {
                 attributeName: split.attributeName,
                 splitType: split.splitType,
@@ -218,7 +239,7 @@
         }
     }; 
     
-    var jsonToTree = function(data, columns, className, maxDepth) {
+    var jsonToTree = function(data, columns, className, options) {
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
         var _columns = removeColumn(columns, className);
@@ -227,7 +248,7 @@
         })[0];
         return {
             class: _class,
-            root: buildNodeFromData(data, _columns, _class.name, maxDepth, 0)
+            root: buildNodeFromData(data, _columns, _class.name, options, 0)
         };
     }; 
     

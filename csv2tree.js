@@ -4,8 +4,12 @@ var minimist = require('minimist');
 var fs = require('fs');
 var DT = require('./decisiontree');
 
+//example:
+// node csv2tree --in test_data/iris.csv --out mytree.json --class "Species" --ignore "" --maxDepth 3
+
 var args = minimist(process.argv.slice(2), {
     string: ['in', 'out', 'class', 'ignore'],
+    boolean: ['randomize'],
     default: {
         out: 'tree.json'
     }
@@ -55,9 +59,14 @@ var jsonToDecisionTree = function(args) {
     }
     return function(json) {
         let data = json.data;
+        let options = {
+            maxDepth: args.maxDepth, 
+            randomize: args.randomize,
+            splitCount: args.splitCount
+        }
         let columns = DT.removeColumns(DT.getColumns(data), ignore);
         console.log(columns);
-        return DT.jsonToTree(data, columns, args.class, args.maxDepth);   
+        return DT.jsonToTree(data, columns, args.class, options);   
     }
 };
 
