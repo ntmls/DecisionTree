@@ -46,25 +46,9 @@ var range = function(start, end) {
     return result;  
 };
 
-var drawSample = function(xs) {
-    let len = xs.length;
-    let r = Math.floor(Math.random() * len);
-    return xs[r];
-}; 
-
 var splitData = function(percent) {
     return function(json) {
-        var data = json.data; 
-        var len = data.length;
-        var result = [];
-        for (let i = 0; i < argv.sets; i++) {
-            let set = [];
-            for (let j = 0; j < argv.rows; j++) {
-                set.push(drawSample(data));
-            }
-            result.push(set);         
-        }
-        return result;
+        return DT.bootstrapData(json.data, argsv.sets, argv.rows);
     };
 };
 

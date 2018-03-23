@@ -66,7 +66,7 @@ var jsonToDecisionTree = function(args) {
         }
         let columns = DT.removeColumns(DT.getColumns(data), ignore);
         console.log(columns);
-        return DT.jsonToTree(data, columns, args.class, options);   
+        return DT.createTree(data, columns, args.class, options);   
     }
 };
 

@@ -111,6 +111,8 @@
             case 'less-than':
                 predicate = lessThanPredicate(attributeName, value);
                 break;
+            default:
+                throw("Node splitType is invalid.")
         }
         
         for (let i = 0; i < len; i++) {
@@ -239,7 +241,7 @@
         }
     }; 
     
-    var jsonToTree = function(data, columns, className, options) {
+    var createTree = function(data, columns, className, options) {
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
         var _columns = removeColumn(columns, className);
@@ -259,14 +261,16 @@
         if (node.predicate === undefined) {
             switch (node.splitType) {
                 case 'equals':
-                    node.predicate = equalsPredicate;
+                    node.predicate = equalsPredicate(node.attributeName, node.splitValue);
                     break;
                 case 'less-than':
-                    node.predicate = lessThanPredicate;
+                    node.predicate = lessThanPredicate(node.attributeName, node.splitValue);
                     break;
+                default: 
+                    throw("Node splitType not valid");
             };    
         }
-        if (node.predicate(node.attributeName, node.value)(row)) {
+        if (node.predicate(row)) {
             return evalNode(node.left, row);
         } else {
             return evalNode(node.right, row);
@@ -277,11 +281,70 @@
         return evalNode(tree.root, row);  
     };
     
+    var drawSample = function(xs) {
+        let len = xs.length;
+        let r = Math.floor(Math.random() * len);
+        return xs[r];
+    }; 
+    
+    var bootstrapData = function(data, sets, rows) {
+        var len = data.length;
+        if (rows === undefined) { rows = len; }
+        var result = [];
+        for (let i = 0; i < sets; i++) {
+            let set = [];
+            for (let j = 0; j < rows; j++) {
+                set.push(drawSample(data));
+            }
+            result.push(set);         
+        }
+        return result;
+    };
+    
+    var createForest = function(data, className, options) {
+        let sets = bootstrapData(data, options.trees); 
+        let trees = sets.map(function(set) {
+            let columns = getColumns(set);
+            let tree = createTree(data, columns, className, options);
+            return tree;
+        });
+        return trees;
+    };
+    
+    var evalForest = function(forest, row) {
+        var idx = 0;
+        var map = [];
+        let len = forest.length;
+        let results = [];
+        for (let i=0; i < len; i++) {
+            var treeResult = evalTree(forest[i], row); 
+            for (let j=0; j < treeResult.length; j++) {
+                var value = treeResult[j].value;
+                if (map[value] === undefined) {
+                    map[value] = idx;
+                    results[idx] = {
+                        value: treeResult[j].value, 
+                        probability: treeResult[j].probability
+                    }; 
+                    idx = idx+1;
+                } else {
+                    results[map[value]].probability += treeResult[j].probability;
+                }
+            }
+        }
+        return results.sort(function(a,b) {
+            return b.probability - a.probability;
+        });
+    };
+    
     var exports = {
-        jsonToTree: jsonToTree, 
-        evalTree: evalTree, 
         getColumns: getColumns, 
-        removeColumns: removeColumns
+        removeColumns: removeColumns,
+        createTree: createTree, 
+        evalTree: evalTree, 
+        createForest: createForest,
+        evalForest: evalForest, 
+        bootstrapData: bootstrapData
     };
     
     if (typeof module === 'undefined') {
