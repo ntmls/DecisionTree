@@ -49,6 +49,33 @@
         return result;
     };
     
+    var randommIndices = function(count) {
+        let result = [];
+        for (let i = 0; i < count; i++) {
+            result.push({
+                i: i,
+                r: Math.random()
+            });
+        }  
+        let sorted = result.sort(function(a,b) {
+            return a.r - b.r;
+        });
+        return sorted.map(function(x) {
+           return x.i; 
+        });
+    };
+    
+    var randomColumns = function(columns, count) {
+        if (count === undefined) { return columns; }
+        let len = columns.length;
+        let ids = randommIndices(len);
+        let result = [];
+        for(let i=0; i<count; i++) {
+            result.push(columns[ids[i]]);
+        }
+        return result;
+    };
+    
     var sum = function(xs) {
         return xs.reduce(function(a, b) {
             return a + b;              
@@ -244,7 +271,7 @@
     var createTree = function(data, columns, className, options) {
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
-        var _columns = removeColumn(columns, className);
+        var _columns = randomColumns(removeColumn(columns, className), options.attributes);
         var _class = columns.filter(function(x) { 
             return x.name == className;
         })[0];

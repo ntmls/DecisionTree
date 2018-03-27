@@ -2,14 +2,24 @@ var fs = require('fs');
 var DT = require('../decisiontree.js');
 var Papa = require('papaparse');
 
-var getData = function() {
+var memoize = function(f) {
+    var r;
+    return function(x) {
+        if (r === undefined) {
+            r = f(x);
+        }
+        return r;
+    }
+}
+
+var getData = memoize(function() {
     var csv = fs.readFileSync('./test_data/weather.csv', 'utf8');
     expect(csv.length).toBe(362); 
     var json = Papa.parse(csv, { header: true });
     var data = json.data;
     expect(data.length).toBe(14);
     return data;
-};
+});
 
 describe("Decision Tree", function() {
     
@@ -83,7 +93,7 @@ describe("Decision Tree", function() {
         var data = getData();
         let options = {
             trees: 50,
-            maxDepth: 4, 
+            maxDepth: 3, 
             randomize: true,
             splitCount: 10
         };
@@ -92,21 +102,37 @@ describe("Decision Tree", function() {
         expect(forest).toBeDefined();
     });
     
+    var PerfLog = function() {
+        var start = Date.now();
+        this.nextTime = function() {
+            var time = Date.now();
+            var duration = time - start;
+            start = time;
+            return duration;
+        };
+    }
+    
     it("Evaluate a forest", function() {
+        var perfLog = new PerfLog();
+        console.log('Start: ' + perfLog.nextTime());
         var data = getData();
+        console.log('getDate: ' + perfLog.nextTime());
         let options = {
             trees: 200,
-            maxDepth: 4, 
+            attributes: 3,
+            maxDepth: 3, 
             randomize: true,
             splitCount: 10
         };
         var forest = DT.createForest(data, "Play", options);
+        console.log('create forest: ' + perfLog.nextTime());
         var results = data.map(function(row) {
             var result = DT.evalForest(forest, row); 
             console.log(result);
             expect(result[0].value).toBe(row.Play);
             return result;
         }); 
+        console.log('evaluate all data for forest: ' + perfLog.nextTime());
     });
     
 });
