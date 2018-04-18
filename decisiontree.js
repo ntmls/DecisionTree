@@ -1,11 +1,11 @@
 (function(window) {
     
-    var getDistinctValues = function(data, columnName) {
+    var getDistinctValues = function(data, index) {
         let values = [];
         let valueMap = [];
         let len = data.length;
         for(let i = 0; i < data.length; i++) {
-            let value = data[i][columnName]; 
+            let value = data[i][index]; 
             if (valueMap[value] === undefined) {
                 valueMap[value] = 1;
                 values.push(value);
@@ -17,22 +17,32 @@
     }
 
     var getColumns = function(data) {
-        var names = Object.getOwnPropertyNames(data[0]);
-        var len = data.length;
+        var names = data[0];
+        var rows = data.slice(1);
+        var len = names.length;
         var categoricalThreshold;
-        return names.map(function(x) {
-            var values = getDistinctValues(data, x);
+        var results = [];
+        var isNumeric, isBoolean;
+        for(let i=0; i<len; i++) {
+            var values = getDistinctValues(rows, i);
             var isCat = (values.length < 10);
-            var isNumeric = (values.filter(function(x) {
-                return isFinite(x.value);
-            }).length == values.length);
-            return {
-                name: x,
+            isNumeric = true;
+            isBoolean = true;
+            for(let j=0; j<values.length; j++) {
+                if (!isFinite(values[j].value)) { isNumeric = false; }
+                if (!(typeof values[j].value === 'boolean')) { isBoolean = false; }
+            }
+            var column = {
+                index: i,
+                name: names[i],
                 uniqueValues: values.length,
                 isCategorical: isCat,
-                isNumeric: isNumeric
+                isNumeric: (isNumeric && !isBoolean),
+                isBoolean: isBoolean
             };
-        });
+            results.push(column);
+        }
+        return results;
     };
     
     var removeColumn = function(columns, columnName) {
@@ -82,12 +92,12 @@
         }, 0);
     }; 
     
-    var getStats = function(data, columnName) {
+    var getStats = function(data, index) {
         let total = 0;
         let len = data.length;
         var min, max;
         for(let i = 0; i < len; i++) {
-            let value = parseFloat(data[i][columnName]);
+            let value = parseFloat(data[i][index]);
             total += value;
             if (i==0) {
                 min = value;
@@ -113,19 +123,19 @@
         return 1 - sum(probsSquared);
     };
 
-    var equalsPredicate = function(attributeName, value) {
+    var equalsPredicate = function(index, value) {
         return function(row) {
-            return row[attributeName] == value;
+            return row[index] == value;
         };
     };
     
-    var lessThanPredicate = function(attributeName, value) {
+    var lessThanPredicate = function(index, value) {
         return function(row) {
-            return row[attributeName] < value;
+            return row[index] < value;
         };
     };
     
-    var split = function(data, splitType, attributeName, value, className, parentGini) {
+    var split = function(data, splitType, column, value, targetIndex, parentGini) {
         let left = [],
             right = [],
             len = data.length, 
@@ -133,10 +143,10 @@
         
         switch (splitType) {
             case 'equals':
-                predicate = equalsPredicate(attributeName, value);
+                predicate = equalsPredicate(column.index, value);
                 break;
             case 'less-than':
-                predicate = lessThanPredicate(attributeName, value);
+                predicate = lessThanPredicate(column.index, value);
                 break;
             default:
                 throw("Node splitType is invalid.")
@@ -149,12 +159,13 @@
                 right.push(data[i]);
             }
         }
-        let lgini = calcGini(left, className);
-        let rgini = calcGini(right, className);
+        let lgini = calcGini(left, targetIndex);
+        let rgini = calcGini(right, targetIndex);
         let gini = (left.length / len) * lgini + (right.length / len) * rgini;
         
         return {
-            attributeName: attributeName,
+            columnName: column.name,
+            columnIndex: column.index,
             value: value,
             splitType: splitType,
             gini: gini,
@@ -164,31 +175,31 @@
         };
     };
     
-    var getPartitions = function(data, columns, className, parentGini, options) {
+    var getPartitions = function(data, columns, targetIndex, parentGini, options) {
         var partitions = [];
         let alen = columns.length;
         for (let i = 0; i < alen; i++) {
-            let attribute = columns[i];
-            if (attribute.isCategorical) {
-               let values = getDistinctValues(data, attribute.name);
+            let column = columns[i];
+            if (column.isCategorical) {
+               let values = getDistinctValues(data, column.index);
                 let vlen = values.length;
                 if (vlen > 1) {                         // only partition if therr is more than one value
                     for (let j = 0; j < vlen; j++) {
                         let value = values[j];
-                        let partition = split(data, 'equals', attribute.name, value.value, className, parentGini);
+                        let partition = split(data, 'equals', column, value.value, targetIndex, parentGini);
                         partitions.push(partition);
                     }
                 }
-            } else if (attribute.isNumeric) {
-                let stats = getStats(data, attribute.name);
+            } else if (column.isNumeric) {
+                let stats = getStats(data, column.index);
                 if (options.randomize) {
                     for(let j=0; j < options.splitCount; j++) {
                         let r = (stats.max - stats.min) * Math.random() + stats.min; 
-                        let partition = split(data, 'less-than', attribute.name, r, className, parentGini);  
+                        let partition = split(data, 'less-than', column, r, targetIndex, parentGini);  
                         partitions.push(partition);
                     }  
                 } else {
-                    let partition = split(data, 'less-than', attribute.name, stats.mean, className, parentGini);  
+                    let partition = split(data, 'less-than', column, stats.mean, targetIndex, parentGini);  
                     partitions.push(partition);
                 }
             }
@@ -214,22 +225,22 @@
         return maxSplit;
     };
     
-    var buildNodeFromData = function(data, columns, className, options, depth) {
+    var buildNodeFromData = function(data, columns, target, options, depth) {
         if (depth === undefined) { 
             depth = 0;
         }
         let maxDepth = options.maxDepth;
         let recordCount = data.length;
-        let gini = calcGini(data, className);
+        let gini = calcGini(data, target.index);
         let left = {};
         let right = {};
-        let values = getDistinctValues(data, className);
+        let values = getDistinctValues(data, target.index);
 
         let shouldStop = true;
         if (maxDepth !== undefined && depth >= maxDepth) { 
             shouldStop = true; 
         } else if (values.length > 1) {    
-            var splits = getPartitions(data, columns, className, gini, options);
+            var splits = getPartitions(data, columns, target.index, gini, options);
             if (splits.length > 0) {
                 shouldStop = false;
             }
@@ -255,10 +266,11 @@
             };
         } else {
             let split = getMaxGain(splits); 
-            left = buildNodeFromData(split.left, columns, className, options, depth + 1);
-            right = buildNodeFromData(split.right, columns, className, options, depth + 1);  
+            left = buildNodeFromData(split.left, columns, target, options, depth + 1);
+            right = buildNodeFromData(split.right, columns, target, options, depth + 1);  
             return {
-                attributeName: split.attributeName,
+                columnName: split.columnName,
+                columnIndex: split.columnIndex,
                 splitType: split.splitType,
                 splitValue: split.value,
                 hasChildren: !shouldStop,
@@ -269,15 +281,16 @@
     }; 
     
     var createTree = function(data, columns, className, options) {
+        var rows = data.slice(1);
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
         var _columns = randomColumns(removeColumn(columns, className), options.attributes);
-        var _class = columns.filter(function(x) { 
+        var target = columns.filter(function(x) { 
             return x.name == className;
         })[0];
         return {
-            class: _class,
-            root: buildNodeFromData(data, _columns, _class.name, options, 0)
+            target: target,
+            root: buildNodeFromData(rows, _columns, target, options, 0)
         };
     }; 
     
@@ -288,10 +301,10 @@
         if (node.predicate === undefined) {
             switch (node.splitType) {
                 case 'equals':
-                    node.predicate = equalsPredicate(node.attributeName, node.splitValue);
+                    node.predicate = equalsPredicate(node.columnIndex, node.splitValue);
                     break;
                 case 'less-than':
-                    node.predicate = lessThanPredicate(node.attributeName, node.splitValue);
+                    node.predicate = lessThanPredicate(node.columnIndex, node.splitValue);
                     break;
                 default: 
                     throw("Node splitType not valid");
@@ -316,10 +329,12 @@
     
     var bootstrapData = function(data, sets, rows) {
         var len = data.length;
+        let headers = data[0];
         if (rows === undefined) { rows = len; }
         var result = [];
         for (let i = 0; i < sets; i++) {
             let set = [];
+            set.push(headers);
             for (let j = 0; j < rows; j++) {
                 set.push(drawSample(data));
             }
@@ -329,22 +344,25 @@
     };
     
     var createForest = function(data, className, options) {
+        let columns = getColumns(data);
         let sets = bootstrapData(data, options.trees); 
         let trees = sets.map(function(set) {
-            let columns = getColumns(set);
             let tree = createTree(data, columns, className, options);
             return tree;
         });
-        return trees;
+        return {
+            target: trees[0].target,
+            trees: trees
+        };
     };
     
     var evalForest = function(forest, row) {
         var idx = 0;
         var map = [];
-        let len = forest.length;
+        let len = forest.trees.length;
         let results = [];
         for (let i=0; i < len; i++) {
-            var treeResult = evalTree(forest[i], row); 
+            var treeResult = evalTree(forest.trees[i], row); 
             for (let j=0; j < treeResult.length; j++) {
                 var value = treeResult[j].value;
                 if (map[value] === undefined) {
