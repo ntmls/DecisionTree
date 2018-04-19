@@ -4,16 +4,21 @@
         let values = [];
         let valueMap = [];
         let len = data.length;
+        let idx = 0;
         for(let i = 0; i < len; i++) {
             let value = data[i][index]; 
             if (valueMap[value] === undefined) {
-                valueMap[value] = 1;
-                values.push(value);
+                valueMap[value] = idx;
+                values.push({
+                    value: value,
+                    count: 1
+                });
+                idx++;
             } else {
-                valueMap[value] += 1;
+                values[valueMap[value]].count += 1;
             }
         }
-        return values.map(function(x) { return { value: x, count: valueMap[x] }; });
+        return values;
     }
 
     var getColumns = function(data) {
