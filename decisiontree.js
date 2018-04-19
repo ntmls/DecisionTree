@@ -4,7 +4,7 @@
         let values = [];
         let valueMap = [];
         let len = data.length;
-        for(let i = 0; i < data.length; i++) {
+        for(let i = 0; i < len; i++) {
             let value = data[i][index]; 
             if (valueMap[value] === undefined) {
                 valueMap[value] = 1;
@@ -363,7 +363,8 @@
         let results = [];
         for (let i=0; i < len; i++) {
             var treeResult = evalTree(forest.trees[i], row); 
-            for (let j=0; j < treeResult.length; j++) {
+            let rlen = treeResult.length;
+            for (let j=0; j < rlen; j++) {
                 var value = treeResult[j].value;
                 if (map[value] === undefined) {
                     map[value] = idx;
