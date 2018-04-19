@@ -91,11 +91,13 @@
         return result;
     };
     
+    /*
     var sum = function(xs) {
         return xs.reduce(function(a, b) {
             return a + b;              
         }, 0);
     }; 
+    */
     
     var getStats = function(data, index) {
         let total = 0;
@@ -118,14 +120,16 @@
         };
     };
     
-    var calcGini = function(data, className) {
-        var classValues = getDistinctValues(data, className);
+    var calcGini = function(data, index) {
+        var targetValues = getDistinctValues(data, index);
         var recordCount = data.length;
-        var probsSquared = classValues.map(function(x) {
-            var probability = x.count / recordCount; 
-            return probability * probability;
-        });
-        return 1 - sum(probsSquared);
+        let sum = 0;
+        let values_length = targetValues.length;
+        for(let i=0; i<values_length; i++) {
+            let probability = targetValues[i].count / recordCount;
+            sum += (probability * probability);
+        }
+        return 1 - sum;
     };
 
     var equalsPredicate = function(index, value) {
