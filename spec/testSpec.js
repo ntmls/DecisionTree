@@ -83,7 +83,7 @@ describe("Decision Tree - ", function() {
         let options = {
             maxDepth: 1000, 
             randomize: true,
-            splitCount: 10
+            splitCount: 3
         };
         var tree = DT.createTree(data, columns, 'Play', options);
         expect(tree).toBeDefined();
@@ -96,7 +96,7 @@ describe("Decision Tree - ", function() {
         let options = {
             maxDepth: 1000, 
             randomize: true,
-            splitCount: 10
+            splitCount: 3
         };
         let tree = DT.createTree(data, columns, 'Play', options);
         let results = data.slice(1).map(function(row) {
@@ -116,9 +116,9 @@ describe("Decision Tree - ", function() {
         var data = getData();
         let options = {
             trees: 50,
-            maxDepth: 3, 
+            maxDepth: 10, 
             randomize: true,
-            splitCount: 10
+            splitCount: 3
         };
         var forest = DT.createForest(data, "Play", options);
         //console.log(forest);
@@ -143,7 +143,7 @@ describe("Decision Tree - ", function() {
         let options = {
             trees: 200,
             attributes: 3,
-            maxDepth: 3, 
+            maxDepth: 10, 
             randomize: true,
             splitCount: 10
         };
