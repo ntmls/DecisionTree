@@ -27,23 +27,31 @@
         var len = names.length;
         var categoricalThreshold;
         var results = [];
-        var isNumeric, isBoolean;
+        var isNumeric, isBoolean, predicate;
         for(let i=0; i<len; i++) {
             var values = getDistinctValues(rows, i);
-            var isCat = (values.length < 10);
+            let vlen = values.length; 
+            var isCat = (vlen < 10);
             isNumeric = true;
             isBoolean = true;
-            for(let j=0; j<values.length; j++) {
+            for(let j=0; j<vlen; j++) {
                 if (!isFinite(values[j].value)) { isNumeric = false; }
                 if (!(typeof values[j].value === 'boolean')) { isBoolean = false; }
+            }
+            isNumeric = (isNumeric && !isBoolean);
+            if (isCat) {
+                predicate = equalsPredicate(i);
+            } else if (isNumeric) {
+                predicate = lessThanPredicate(i);
             }
             var column = {
                 index: i,
                 name: names[i],
-                uniqueValues: values.length,
+                uniqueValues: vlen,
                 isCategorical: isCat,
-                isNumeric: (isNumeric && !isBoolean),
-                isBoolean: isBoolean
+                isNumeric: isNumeric,
+                isBoolean: isBoolean,
+                predicate: predicate
             };
             results.push(column);
         }
@@ -91,14 +99,6 @@
         return result;
     };
     
-    /*
-    var sum = function(xs) {
-        return xs.reduce(function(a, b) {
-            return a + b;              
-        }, 0);
-    }; 
-    */
-    
     var getStats = function(data, index) {
         let total = 0;
         let len = data.length;
@@ -132,34 +132,29 @@
         return 1 - sum;
     };
 
-    var equalsPredicate = function(index, value) {
-        return function(row) {
-            return row[index] == value;
+    var equalsPredicate = function(index) {
+        return function(value) {
+            return function(row) {
+                return row[index] == value;
+            };  
         };
     };
     
-    var lessThanPredicate = function(index, value) {
-        return function(row) {
-            return row[index] < value;
+    var lessThanPredicate = function(index) {
+        return function(value) {
+            return function(row) {
+                return row[index] < value;
+            };
         };
     };
     
-    var split = function(data, splitType, column, value, targetIndex, parentGini) {
+    var split = function(data, column, value, targetIndex, parentGini) {
         let left = [],
             right = [],
             len = data.length, 
             predicate;
         
-        switch (splitType) {
-            case 'equals':
-                predicate = equalsPredicate(column.index, value);
-                break;
-            case 'less-than':
-                predicate = lessThanPredicate(column.index, value);
-                break;
-            default:
-                throw("Node splitType is invalid.")
-        }
+        predicate = column.predicate(value);
         
         for (let i = 0; i < len; i++) {
             if (predicate(data[i])) {
@@ -173,10 +168,8 @@
         let gini = (left.length / len) * lgini + (right.length / len) * rgini;
         
         return {
-            columnName: column.name,
-            columnIndex: column.index,
+            column: column,
             value: value,
-            splitType: splitType,
             gini: gini,
             gain: parentGini - gini,
             left: left,
@@ -195,7 +188,7 @@
                 if (vlen > 1) {                         // only partition if therr is more than one value
                     for (let j = 0; j < vlen; j++) {
                         let value = values[j];
-                        let partition = split(data, 'equals', column, value.value, targetIndex, parentGini);
+                        let partition = split(data, column, value.value, targetIndex, parentGini);
                         partitions.push(partition);
                     }
                 }
@@ -204,11 +197,11 @@
                 if (options.randomize) {
                     for(let j=0; j < options.splitCount; j++) {
                         let r = (stats.max - stats.min) * Math.random() + stats.min; 
-                        let partition = split(data, 'less-than', column, r, targetIndex, parentGini);  
+                        let partition = split(data, column, r, targetIndex, parentGini);  
                         partitions.push(partition);
                     }  
                 } else {
-                    let partition = split(data, 'less-than', column, stats.mean, targetIndex, parentGini);  
+                    let partition = split(data, column, stats.mean, targetIndex, parentGini);  
                     partitions.push(partition);
                 }
             }
@@ -269,7 +262,6 @@
                 };
             });
             return {
-                splitType: 'none',
                 hasChildren: false,
                 values: temp
             };
@@ -278,9 +270,7 @@
             left = buildNodeFromData(split.left, columns, target, options, depth + 1);
             right = buildNodeFromData(split.right, columns, target, options, depth + 1);  
             return {
-                columnName: split.columnName,
-                columnIndex: split.columnIndex,
-                splitType: split.splitType,
+                column: split.column,
                 splitValue: split.value,
                 hasChildren: !shouldStop,
                 left: left,
@@ -307,19 +297,7 @@
         if (!node.hasChildren) {
             return node.values;
         }
-        if (node.predicate === undefined) {
-            switch (node.splitType) {
-                case 'equals':
-                    node.predicate = equalsPredicate(node.columnIndex, node.splitValue);
-                    break;
-                case 'less-than':
-                    node.predicate = lessThanPredicate(node.columnIndex, node.splitValue);
-                    break;
-                default: 
-                    throw("Node splitType not valid");
-            };    
-        }
-        if (node.predicate(row)) {
+        if (node.column.predicate(node.splitValue)(row)) {
             return evalNode(node.left, row);
         } else {
             return evalNode(node.right, row);
