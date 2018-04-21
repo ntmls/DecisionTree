@@ -1,23 +1,24 @@
 (function(window) {
     
-    var getDistinctValues = function(data, index) {
+    var getDistinctValues = function(data, columnIndex) {
         let values = [];
         let valueMap = [];
         let len = data.length;
         let idx = 0;
         for(let i = 0; i < len; i++) {
-            let value = data[i][index]; 
-            if (valueMap[value] === undefined) {
-                valueMap[value] = idx;
+            let valueName = data[i][columnIndex]; 
+            if (valueMap[valueName] === undefined) {
+                valueMap[valueName] = idx;
                 values.push({
-                    value: value,
+                    value: valueName,
                     count: 1
                 });
                 idx++;
             } else {
-                values[valueMap[value]].count += 1;
+                values[valueMap[valueName]].count += 1;
             }
         }
+        //console.log(values);
         return values;
     }
 
@@ -120,8 +121,8 @@
         };
     };
     
-    var calcGini = function(data, index) {
-        var targetValues = getDistinctValues(data, index);
+    var calcGini = function(data, columnIndex) {
+        var targetValues = getDistinctValues(data, columnIndex);
         var recordCount = data.length;
         let sum = 0;
         let values_length = targetValues.length;
