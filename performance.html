@@ -1,0 +1,35 @@
+<html>
+    <head>
+        <script src="decisiontree.js"></script>
+        <script src="/node_modules/papaparse/papaparse.min.js"></script>
+        <script>
+            var path = "./test_data/weather.csv"
+            var xhr=new XMLHttpRequest();
+            xhr.onload=function(){
+                var text = xhr.responseText;
+                console.log(text);
+                var data = Papa.parse(text, {
+                    header: false, 
+                    dynamicTyping: true
+                });
+                console.log(data);
+                let options = {
+                    trees: 200,
+                    attributes: 3,
+                    maxDepth: 10, 
+                    randomize: true,
+                    splitCount: 10
+                };
+                for (let i=0; i<100; i++) {
+                    var forest = DT.createForest(data.data, "Play", options);   
+                }
+                console.log(forest);
+            }
+            xhr.open("GET",path);
+            xhr.send();
+        </script>
+    </head>
+    <body>
+        
+    </body>
+</html>
