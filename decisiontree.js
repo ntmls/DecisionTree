@@ -33,7 +33,6 @@
                 predicate: predicate
             };
             results.push(column);
-            //console.log(column);
         }
         return results;
     };
@@ -115,13 +114,13 @@
     };
     
      var countValues = function(data, columnValues, columnIndex) {
-        let values = [];
         let len = data.length;
         let vlen = columnValues.length;
+        //let values = new Array(vlen);
         let index = 0;
         var valueName;
         let indices = [];
-        let results = [];
+        let results = new Array(vlen);
         for(let i=0; i<vlen; i++) {
             indices[columnValues[i]] = i;
             results[i] = {
@@ -173,6 +172,55 @@
         };
     };
     
+    // Get all candidate partitions
+    var getPartitions = function(data, columns, target, parentGini, options) {
+        let len = columns.length;
+        let index = 0;
+        var partitions = [];
+        for (let i = 0; i < len; i++) {
+            let column = columns[i];
+            let partition = getColumnPartition(data, column, target, parentGini, options);
+            if (partition !== undefined) {
+                partitions[index] = partition;
+                index++                
+            }
+        }
+        return partitions;
+    };
+    
+    // Get the partitions for a given column based on data type and user specified options
+    var getColumnPartition = function(data, column, target, parentGini, options) {
+        var partition;
+        if (column.isCategorical) {
+           let values = countValues(data, column.values, column.index);
+            let vlen = values.length;
+            if (vlen > 1) {                         // only partition if there is more than one value
+                let partitions = new Array(vlen);
+                for (let j = 0; j < vlen; j++) {
+                    let value = values[j];
+                    partitions[j] = split(data, column, value.value, target, parentGini);
+                }
+                partition = getMaxGain(partitions);
+            } else {
+                return undefined; //couldn't split. All the values for the column are the same.
+            }
+        } else if (column.isNumeric) {
+            let stats = getStats(data, column.index);
+            if (options.randomize) {
+                let partitions = new Array(options.splitCount);
+                for(let j=0; j < options.splitCount; j++) {
+                    let r = (stats.max - stats.min) * Math.random() + stats.min; 
+                    partitions[j] = split(data, column, r, target, parentGini);  
+                }
+                partition = getMaxGain(partitions);
+            } else {
+                partition = split(data, column, stats.mean, target, parentGini);  
+            }
+        }
+        return partition;
+    };  
+    
+    // given the data and a column split the data.
     var split = function(data, column, value, target, parentGini) {
         let left = [],
             right = [],
@@ -202,50 +250,23 @@
         };
     };
     
-    var getPartitions = function(data, columns, target, parentGini, options) {
-        var partitions = [];
-        let alen = columns.length;
-        for (let i = 0; i < alen; i++) {
-            let column = columns[i];
-            if (column.isCategorical) {
-               let values = countValues(data, column.values, column.index);
-                let vlen = values.length;
-                if (vlen > 1) {                         // only partition if therr is more than one value
-                    for (let j = 0; j < vlen; j++) {
-                        let value = values[j];
-                        let partition = split(data, column, value.value, target, parentGini);
-                        partitions.push(partition);
-                    }
-                }
-            } else if (column.isNumeric) {
-                let stats = getStats(data, column.index);
-                if (options.randomize) {
-                    for(let j=0; j < options.splitCount; j++) {
-                        let r = (stats.max - stats.min) * Math.random() + stats.min; 
-                        let partition = split(data, column, r, target, parentGini);  
-                        partitions.push(partition);
-                    }  
-                } else {
-                    let partition = split(data, column, stats.mean, target, parentGini);  
-                    partitions.push(partition);
-                }
-            }
-        }
-        return partitions;
-        
-    };
-    
     // Find the split with the maximium gain. 
     // If there is a tie break it by picking at random.
     var getMaxGain = function(splits) {
         let len = splits.length;
-        let maxSplit = splits[0];
-        for(let i = 1; i < len; i++) {
-            if (splits[i].gain > maxSplit.gain) {
-                maxSplit = splits[i]; 
-            } else if(splits[i].gain == maxSplit.gain) {
-                if(Math.random() > .5) {
+        let maxSplit;
+        for(let i = 0; i < len; i++) {
+            if (splits[i] !== undefined) {
+                if (maxSplit === undefined) {
                     maxSplit = splits[i];
+                } else {
+                    if (splits[i].gain > maxSplit.gain) {
+                        maxSplit = splits[i]; 
+                    } else if(splits[i].gain == maxSplit.gain) {
+                        if(Math.random() > .5) {
+                            maxSplit = splits[i];
+                        }
+                    }      
                 }
             }
         }
@@ -262,14 +283,13 @@
         let left = {};
         let right = {};
         let values = countValues(data, target.values, target.index);
-        //console.log(target.values);
 
         let shouldStop = true;
         if (maxDepth !== undefined && depth >= maxDepth) { 
             shouldStop = true; 
         } else if (values.length > 1) {    
-            var splits = getPartitions(data, columns, target, gini, options);
-            if (splits.length > 0) {
+            var partitions = getPartitions(data, columns, target, gini, options);
+            if (partitions.length > 0) {
                 shouldStop = false;
             }
         }
@@ -292,12 +312,12 @@
                 values: temp
             };
         } else {
-            let split = getMaxGain(splits); 
-            left = buildNodeFromData(split.left, columns, target, options, depth + 1);
-            right = buildNodeFromData(split.right, columns, target, options, depth + 1);  
+            let partition = getMaxGain(partitions);
+            left = buildNodeFromData(partition.left, columns, target, options, depth + 1);
+            right = buildNodeFromData(partition.right, columns, target, options, depth + 1);  
             return {
-                column: split.column,
-                splitValue: split.value,
+                column: partition.column,
+                splitValue: partition.value,
                 hasChildren: !shouldStop,
                 left: left,
                 right: right
@@ -321,7 +341,6 @@
     
     var evalNode = function(node, row) {
         if (!node.hasChildren) {
-            //console.log(node.values);
             return node.values;
         }
         if (node.column.predicate(node.splitValue)(row)) {
