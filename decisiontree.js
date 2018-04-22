@@ -114,30 +114,39 @@
         };
     };
     
-     var countValues = function(data, columnIndex) {
+     var countValues = function(data, columnValues, columnIndex) {
         let values = [];
-        let valueMap = [];
         let len = data.length;
-        let idx = 0;
+        let vlen = columnValues.length;
+        let index = 0;
+        var valueName;
+        let indices = [];
+        let results = [];
+        for(let i=0; i<vlen; i++) {
+            indices[columnValues[i]] = i;
+            results[i] = {
+                value: columnValues[i],
+                count: 0
+            };
+        }
+        
         for(let i = 0; i < len; i++) {
-            let valueName = data[i][columnIndex]; 
-            if (valueMap[valueName] === undefined) {
-                valueMap[valueName] = idx;
-                values.push({
-                    value: valueName,
-                    count: 1
-                });
-                idx++;
-            } else {
-                values[valueMap[valueName]].count += 1;
+            valueName = data[i][columnIndex]; 
+            index = indices[valueName];
+            results[index].count += 1;
+        }
+        
+        var temp = [];
+        for(let i = 0; i < vlen; i++) {
+            if (results[i].count > 0) {
+                temp.push(results[i]);
             }
         }
-        //console.log(values);
-        return values;
+        return temp;
     }
     
-    var calcGini = function(data, columnIndex) {
-        var targetValues = countValues(data, columnIndex);
+    var calcGini = function(data, columnValues, columnIndex) {
+        var targetValues = countValues(data, columnValues, columnIndex);
         var recordCount = data.length;
         let sum = 0;
         let values_length = targetValues.length;
@@ -164,7 +173,7 @@
         };
     };
     
-    var split = function(data, column, value, targetIndex, parentGini) {
+    var split = function(data, column, value, target, parentGini) {
         let left = [],
             right = [],
             len = data.length, 
@@ -179,8 +188,8 @@
                 right.push(data[i]);
             }
         }
-        let lgini = calcGini(left, targetIndex);
-        let rgini = calcGini(right, targetIndex);
+        let lgini = calcGini(left, target.values, target.index);
+        let rgini = calcGini(right, target.values, target.index);
         let gini = (left.length / len) * lgini + (right.length / len) * rgini;
         
         return {
@@ -193,18 +202,18 @@
         };
     };
     
-    var getPartitions = function(data, columns, targetIndex, parentGini, options) {
+    var getPartitions = function(data, columns, target, parentGini, options) {
         var partitions = [];
         let alen = columns.length;
         for (let i = 0; i < alen; i++) {
             let column = columns[i];
             if (column.isCategorical) {
-               let values = countValues(data, column.index);
+               let values = countValues(data, column.values, column.index);
                 let vlen = values.length;
                 if (vlen > 1) {                         // only partition if therr is more than one value
                     for (let j = 0; j < vlen; j++) {
                         let value = values[j];
-                        let partition = split(data, column, value.value, targetIndex, parentGini);
+                        let partition = split(data, column, value.value, target, parentGini);
                         partitions.push(partition);
                     }
                 }
@@ -213,11 +222,11 @@
                 if (options.randomize) {
                     for(let j=0; j < options.splitCount; j++) {
                         let r = (stats.max - stats.min) * Math.random() + stats.min; 
-                        let partition = split(data, column, r, targetIndex, parentGini);  
+                        let partition = split(data, column, r, target, parentGini);  
                         partitions.push(partition);
                     }  
                 } else {
-                    let partition = split(data, column, stats.mean, targetIndex, parentGini);  
+                    let partition = split(data, column, stats.mean, target, parentGini);  
                     partitions.push(partition);
                 }
             }
@@ -249,16 +258,17 @@
         }
         let maxDepth = options.maxDepth;
         let recordCount = data.length;
-        let gini = calcGini(data, target.index);
+        let gini = calcGini(data, target.values, target.index);
         let left = {};
         let right = {};
-        let values = countValues(data, target.index);
+        let values = countValues(data, target.values, target.index);
+        //console.log(target.values);
 
         let shouldStop = true;
         if (maxDepth !== undefined && depth >= maxDepth) { 
             shouldStop = true; 
         } else if (values.length > 1) {    
-            var splits = getPartitions(data, columns, target.index, gini, options);
+            var splits = getPartitions(data, columns, target, gini, options);
             if (splits.length > 0) {
                 shouldStop = false;
             }
@@ -311,6 +321,7 @@
     
     var evalNode = function(node, row) {
         if (!node.hasChildren) {
+            //console.log(node.values);
             return node.values;
         }
         if (node.column.predicate(node.splitValue)(row)) {
