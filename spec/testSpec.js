@@ -37,35 +37,39 @@ describe("Decision Tree - ", function() {
         expect(columns[0].isCategorical).toBe(true);
         expect(columns[0].isNumeric).toBe(false);
         expect(columns[0].isBoolean).toBe(false);
-        expect(columns[0].uniqueValues).toBe(3);
+        expect(columns[0].values[0]).toBe('sunny');
+        expect(columns[0].values[1]).toBe('overcast');
+        expect(columns[0].values[2]).toBe('rainy');
         
         expect(columns[1].name).toBe("Temperature");
         expect(columns[1].index).toBe(1);
         expect(columns[1].isCategorical).toBe(false);
         expect(columns[1].isNumeric).toBe(true);
         expect(columns[1].isBoolean).toBe(false);
-        expect(columns[1].uniqueValues).toBe(12);
+        expect(columns[1].values).toBeUndefined();
         
         expect(columns[2].name).toBe("Humidity");
         expect(columns[2].index).toBe(2);
         expect(columns[2].isCategorical).toBe(false);
         expect(columns[2].isNumeric).toBe(true);
         expect(columns[2].isBoolean).toBe(false);
-        expect(columns[2].uniqueValues).toBe(10);
+        expect(columns[2].values).toBeUndefined();
         
         expect(columns[3].name).toBe("Windy");
         expect(columns[3].index).toBe(3);
         expect(columns[3].isCategorical).toBe(true);
         expect(columns[3].isNumeric).toBe(false);
         expect(columns[3].isBoolean).toBe(true);
-        expect(columns[3].uniqueValues).toBe(2);
+        expect(columns[3].values[0]).toBe(false);
+        expect(columns[3].values[1]).toBe(true);
         
         expect(columns[4].name).toBe("Play");
         expect(columns[4].index).toBe(4);
         expect(columns[4].isCategorical).toBe(true);
         expect(columns[4].isNumeric).toBe(false);
         expect(columns[4].isNumeric).toBe(false);
-        expect(columns[4].uniqueValues).toBe(2);
+        expect(columns[4].values[0]).toBe('no');
+        expect(columns[4].values[1]).toBe('yes');
     });
     
     it("Remove columns with given names", function() {

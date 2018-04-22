@@ -1,27 +1,5 @@
 (function(window) {
-    
-    var getDistinctValues = function(data, columnIndex) {
-        let values = [];
-        let valueMap = [];
-        let len = data.length;
-        let idx = 0;
-        for(let i = 0; i < len; i++) {
-            let valueName = data[i][columnIndex]; 
-            if (valueMap[valueName] === undefined) {
-                valueMap[valueName] = idx;
-                values.push({
-                    value: valueName,
-                    count: 1
-                });
-                idx++;
-            } else {
-                values[valueMap[valueName]].count += 1;
-            }
-        }
-        //console.log(values);
-        return values;
-    }
-
+        
     var getColumns = function(data) {
         var names = data[0];
         var rows = data.slice(1);
@@ -36,8 +14,8 @@
             isNumeric = true;
             isBoolean = true;
             for(let j=0; j<vlen; j++) {
-                if (!isFinite(values[j].value)) { isNumeric = false; }
-                if (!(typeof values[j].value === 'boolean')) { isBoolean = false; }
+                if (!isFinite(values[j])) { isNumeric = false; }
+                if (!(typeof values[j] === 'boolean')) { isBoolean = false; }
             }
             isNumeric = (isNumeric && !isBoolean);
             if (isCat) {
@@ -48,16 +26,31 @@
             var column = {
                 index: i,
                 name: names[i],
-                uniqueValues: vlen,
                 isCategorical: isCat,
                 isNumeric: isNumeric,
                 isBoolean: isBoolean,
+                values: isCat ? values : undefined,
                 predicate: predicate
             };
             results.push(column);
+            //console.log(column);
         }
         return results;
     };
+    
+    var getDistinctValues = function(data, columnIndex) {
+        let values = [];
+        let map = [];
+        let len = data.length;
+        for(let i = 0; i < len; i++) {
+            let valueName = data[i][columnIndex]; 
+            if (map[valueName] === undefined) {
+                values.push(valueName);
+                map[valueName] = valueName;
+            }
+        }
+        return values;
+    }
     
     var removeColumn = function(columns, columnName) {
         return columns.filter(function(x) { return x.name != columnName; });
@@ -121,8 +114,30 @@
         };
     };
     
+     var countValues = function(data, columnIndex) {
+        let values = [];
+        let valueMap = [];
+        let len = data.length;
+        let idx = 0;
+        for(let i = 0; i < len; i++) {
+            let valueName = data[i][columnIndex]; 
+            if (valueMap[valueName] === undefined) {
+                valueMap[valueName] = idx;
+                values.push({
+                    value: valueName,
+                    count: 1
+                });
+                idx++;
+            } else {
+                values[valueMap[valueName]].count += 1;
+            }
+        }
+        //console.log(values);
+        return values;
+    }
+    
     var calcGini = function(data, columnIndex) {
-        var targetValues = getDistinctValues(data, columnIndex);
+        var targetValues = countValues(data, columnIndex);
         var recordCount = data.length;
         let sum = 0;
         let values_length = targetValues.length;
@@ -184,7 +199,7 @@
         for (let i = 0; i < alen; i++) {
             let column = columns[i];
             if (column.isCategorical) {
-               let values = getDistinctValues(data, column.index);
+               let values = countValues(data, column.index);
                 let vlen = values.length;
                 if (vlen > 1) {                         // only partition if therr is more than one value
                     for (let j = 0; j < vlen; j++) {
@@ -237,7 +252,7 @@
         let gini = calcGini(data, target.index);
         let left = {};
         let right = {};
-        let values = getDistinctValues(data, target.index);
+        let values = countValues(data, target.index);
 
         let shouldStop = true;
         if (maxDepth !== undefined && depth >= maxDepth) { 
