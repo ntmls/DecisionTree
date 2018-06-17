@@ -12,7 +12,7 @@ var memoize = function(f) {
     }
 }
 
-var getData = memoize(function() {
+var getWeatherData = memoize(function() {
     var csv = fs.readFileSync('./test_data/weather.csv', 'utf8');
     expect(csv.length).toBe(362); 
     var json = Papa.parse(csv, { 
@@ -36,7 +36,7 @@ var createRandomGenerator = function(seed) {
 describe("Decision Tree - ", function() {
     
     it("Get columns from data", function() {
-        var data = getData();
+        var data = getWeatherData();
         var columns = DT.getColumns(data, []);
         expect(columns.length).toBe(5); 
         
@@ -81,7 +81,7 @@ describe("Decision Tree - ", function() {
     });
     
     it("Remove columns with given names", function() {
-        var data = getData();
+        var data = getWeatherData();
         var columns = DT.removeColumns(DT.getColumns(data, []), ["Temperature", "Play"]);
         expect(columns.length).toBe(3); 
         expect(columns[0].name).toBe("Outlook");
@@ -90,7 +90,7 @@ describe("Decision Tree - ", function() {
     });
     
     it("Create a tree from weather data", function() {
-        var data = getData();
+        var data = getWeatherData();
         var columns = DT.getColumns(data, []);
         let options = {
             maxDepth: 1000, 
@@ -103,7 +103,7 @@ describe("Decision Tree - ", function() {
     });
     
     it("Evaluate a tree", function() {
-        let data = getData();
+        let data = getWeatherData();
         let columns = DT.getColumns(data, []);
         let options = {
             maxDepth: 1000, 
@@ -119,13 +119,13 @@ describe("Decision Tree - ", function() {
     });
     
     it("Bootstrap Data", function() {
-        var data = getData();
+        var data = getWeatherData();
         var sets = DT.bootstrapData(data, 100, 10);
         expect(sets.length).toBeDefined(); 
     });
     
     it("Create a forest from weather data", function() {
-        var data = getData();
+        var data = getWeatherData();
         let options = {
             trees: 50,
             maxDepth: 10, 
@@ -150,7 +150,7 @@ describe("Decision Tree - ", function() {
     it("Evaluate a forest", function() {
         var perfLog = new PerfLog();
         console.log('Start: ' + perfLog.nextTime());
-        var data = getData();
+        var data = getWeatherData();
         console.log('getData: ' + perfLog.nextTime());
         let options = {
             trees: 200,
@@ -183,7 +183,7 @@ describe("Decision Tree - ", function() {
     });
     
     it("Must allow a random number generator to be injected.", function() {
-        var data = getData();
+        var data = getWeatherData();
         let options = {
             trees: 10,
             attributes: 3,
