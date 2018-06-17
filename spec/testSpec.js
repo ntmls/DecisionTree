@@ -25,6 +25,14 @@ var getData = memoize(function() {
     return data;
 });
 
+// a psuedo-random function that can be used for testing.
+var createRandomGenerator = function(seed) {
+    return function() {
+        seed = Math.sin(seed) * 10000; 
+        return seed - Math.floor(seed);
+    };
+};
+
 describe("Decision Tree - ", function() {
     
     it("Get columns from data", function() {
@@ -160,6 +168,35 @@ describe("Decision Tree - ", function() {
             return result;
         }); 
         console.log('evaluate all data for forest: ' + perfLog.nextTime());
+    });
+    
+    
+    it("A psuedo random generator with a given seed must return consistant results.", function() {
+        var r;
+        r = createRandomGenerator(5678)
+        expect(r()).toBe(0.01967306989354256);
+        expect(r()).toBe(0.3862162635267623);
+        
+        r = createRandomGenerator(5678)
+        expect(r()).toBe(0.01967306989354256);
+        expect(r()).toBe(0.3862162635267623);
+    });
+    
+    it("Must allow a random number generator to be injected.", function() {
+        var data = getData();
+        let options = {
+            trees: 10,
+            attributes: 3,
+            maxDepth: 10, 
+            randomize: true,
+            splitCount: 10, 
+            random: createRandomGenerator(6789)
+        };
+        var forest = DT.createForest(data, "Play", options);
+        var firstTree = forest.trees[0];
+        console.log(firstTree);
+        expect(firstTree.root.column.index).toBe(2);
+        expect(firstTree.root.right.splitValue).toBe(84.33697460727083);
     });
     
 });
