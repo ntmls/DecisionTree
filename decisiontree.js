@@ -65,12 +65,12 @@
         return result;
     };
     
-    var randommIndices = function(count) {
+    var randommIndices = function(rand, count) {
         let result = [];
         for (let i = 0; i < count; i++) {
             result.push({
                 i: i,
-                r: Math.random()
+                r: rand()
             });
         }  
         let sorted = result.sort(function(a,b) {
@@ -81,10 +81,10 @@
         });
     };
     
-    var randomColumns = function(columns, count) {
+    var randomColumns = function(rand, columns, count) {
         if (count === undefined) { return columns; }
         let len = columns.length;
-        let ids = randommIndices(len);
+        let ids = randommIndices(rand, len);
         let result = [];
         for(let i=0; i<count; i++) {
             result.push(columns[ids[i]]);
@@ -200,7 +200,7 @@
                     let value = values[j];
                     partitions[j] = split(data, column, value.value, target, parentGini);
                 }
-                partition = getMaxGain(partitions);
+                partition = getMaxGain(options.random, partitions);
             } else {
                 return undefined; //couldn't split. All the values for the column are the same.
             }
@@ -209,10 +209,10 @@
             if (options.randomize) {
                 let partitions = new Array(options.splitCount);
                 for(let j=0; j < options.splitCount; j++) {
-                    let r = (stats.max - stats.min) * Math.random() + stats.min; 
+                    let r = (stats.max - stats.min) * options.random() + stats.min; 
                     partitions[j] = split(data, column, r, target, parentGini);  
                 }
-                partition = getMaxGain(partitions);
+                partition = getMaxGain(options.random, partitions);
             } else {
                 partition = split(data, column, stats.mean, target, parentGini);  
             }
@@ -252,7 +252,7 @@
     
     // Find the split with the maximium gain. 
     // If there is a tie break it by picking at random.
-    var getMaxGain = function(splits) {
+    var getMaxGain = function(rand, splits) {
         let len = splits.length;
         let maxSplit;
         for(let i = 0; i < len; i++) {
@@ -263,7 +263,7 @@
                     if (splits[i].gain > maxSplit.gain) {
                         maxSplit = splits[i]; 
                     } else if(splits[i].gain == maxSplit.gain) {
-                        if(Math.random() > .5) {
+                        if(rand() > .5) {
                             maxSplit = splits[i];
                         }
                     }      
@@ -312,7 +312,7 @@
                 values: temp
             };
         } else {
-            let partition = getMaxGain(partitions);
+            let partition = getMaxGain(options.random, partitions);
             left = buildNodeFromData(partition.left, columns, target, options, depth + 1);
             right = buildNodeFromData(partition.right, columns, target, options, depth + 1);  
             return {
@@ -326,10 +326,16 @@
     }; 
     
     var createTree = function(data, columns, className, options) {
+        if (options.random === undefined) {
+            options.random = Math.random;
+        }
         var rows = data.slice(1);
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
-        var _columns = randomColumns(removeColumn(columns, className), options.attributes);
+        var _columns = randomColumns(
+            options.random, 
+            removeColumn(columns, className), 
+            options.attributes);
         var target = columns.filter(function(x) { 
             return x.name == className;
         })[0];
@@ -354,13 +360,13 @@
         return evalNode(tree.root, row);  
     };
     
-    var drawSample = function(xs) {
+    var drawSample = function(rand, xs) {
         let len = xs.length;
-        let r = Math.floor(Math.random() * len);
+        let r = Math.floor(rand() * len);
         return xs[r];
     }; 
     
-    var bootstrapData = function(data, sets, rows) {
+    var bootstrapData = function(rand, data, sets, rows) {
         var len = data.length;
         let headers = data[0];
         if (rows === undefined) { rows = len; }
@@ -369,7 +375,7 @@
             let set = [];
             set.push(headers);
             for (let j = 0; j < rows; j++) {
-                set.push(drawSample(data));
+                set.push(drawSample(rand, data));
             }
             result.push(set);         
         }
@@ -377,8 +383,11 @@
     };
     
     var createForest = function(data, className, options) {
+        if (options.random === undefined) {
+            options.random = Math.random;
+        }
         let columns = getColumns(data);
-        let sets = bootstrapData(data, options.trees); 
+        let sets = bootstrapData(options.random, data, options.trees); 
         let trees = sets.map(function(set) {
             let tree = createTree(data, columns, className, options);
             return tree;

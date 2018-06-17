@@ -195,8 +195,8 @@ describe("Decision Tree - ", function() {
         var forest = DT.createForest(data, "Play", options);
         var firstTree = forest.trees[0];
         console.log(firstTree);
-        expect(firstTree.root.column.index).toBe(2);
-        expect(firstTree.root.right.splitValue).toBe(84.33697460727083);
+        expect(firstTree.root.column.index).toBe(0);
+        expect(firstTree.root.right.splitValue).toBe(76.47565353592199);
     });
     
 });
