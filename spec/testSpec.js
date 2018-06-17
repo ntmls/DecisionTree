@@ -19,10 +19,17 @@ var getWeatherData = memoize(function() {
         header: false,
         dynamicTyping: true
     });
-    var data = json.data;
-    console.log(data);
-    expect(data.length).toBe(15);
-    return data;
+    return json.data;
+});
+
+var getIrisData = memoize(function() {
+    var csv = fs.readFileSync('./test_data/iris.csv', 'utf8');
+    expect(csv.length).toBe(4970); 
+    var json = Papa.parse(csv, { 
+        header: false,
+        dynamicTyping: true
+    });
+    return json.data;
 });
 
 // a psuedo-random function that can be used for testing.
@@ -197,6 +204,22 @@ describe("Decision Tree - ", function() {
         console.log(firstTree);
         expect(firstTree.root.column.index).toBe(0);
         expect(firstTree.root.right.splitValue).toBe(76.47565353592199);
+    });
+    
+        it("Most be able to load weather data file", function() {
+        var data;
+        data = getWeatherData();
+        expect(data).toBeDefined(); 
+        console.log(data);
+        expect(data.length).toBe(15);
+    });
+    
+    it("Most be able to load iris data file", function() {
+        var data;
+        data = getIrisData();
+        expect(data).toBeDefined(); 
+        console.log(data);
+        expect(data.length).toBe(151);
     });
     
 });
