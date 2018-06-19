@@ -1,0 +1,101 @@
+<html>
+    <head>
+        <script src="decisiontree.js"></script>
+        <script src="/node_modules/papaparse/papaparse.min.js"></script>
+        <script>
+            
+            function go() {
+                
+                var data = createData(0, Math.PI, .01, Math.sin);
+                plotData(640, 320, data);
+                var options = {
+                    trees: 100,
+                    minRows: 3,
+                    splitCount: 10,
+                    randomize: true,
+                    maxDepth: 5
+                };
+                var columns = DT.getColumns(data);
+                console.log(columns);
+                var len = data.length;
+                var forest = DT.createForest(data, 'y', options);
+                var results = [];
+                results.push(data[0]);
+                for(let i=1; i<len; i++) {
+                    var result = DT.evalForest(forest, data[i]); 
+                    results.push([data[i][0], result]);
+                }
+                console.log(forest);
+                console.log(results);
+                plotData(640, 320, results);
+            }
+            
+            var createData = function(min, max, incr, f) {
+                var result = [];
+                result.push(['x', 'y']);
+                for(var i=min; i<max; i = i + incr) {
+                    result.push([i, f(i)]);
+                }  
+                return result;
+            };
+            
+            var ValueMapper = {
+                from: function(fromMin, fromMax) {
+                    return {
+                        to: function(toMin, toMax) {
+                            return function(value) {
+                                var t = value / (fromMax - fromMin);
+                                return (toMax - toMin) * t + toMin;
+                            };
+                        }
+                    };
+                }
+            };
+
+            
+            var plotData = function(width, height, data) {
+                var canvas = document.createElement('Canvas');
+                canvas.setAttribute('width', width);
+                canvas.setAttribute('height', height);
+                document.body.appendChild(canvas);
+                var context = canvas.getContext('2d');
+                context.fillRect(0,0,width, height);
+                var minX = data[1][0];
+                var minY = data[1][1];
+                var maxX = data[1][0];
+                var maxY = data[1][1];
+                var dataLen = data.length;
+                for(let i=1; i<dataLen; i++) {
+                    minX = Math.min(minX, data[i][0]);
+                    minY = Math.min(minY, data[i][1]);
+                    maxX = Math.max(maxX, data[i][0]);
+                    maxY = Math.max(maxY, data[i][1]);
+                }
+                var mapx = ValueMapper
+                    .from(minX, maxX)
+                    .to(0, width);
+
+                var mapy = ValueMapper
+                    .from(minY, maxY)
+                    .to(height, 0);
+                
+                context.strokeStyle = 'white';
+                context.beginPath();
+                var lastX = mapx(data[1][0]);
+                var lastY = mapy(data[1][1]);
+                context.moveTo(x,y);
+                for(let i=2; i<dataLen; i++) {
+                    var x = mapx(data[i][0]);
+                    var y = mapy(data[i][1]);
+                    context.lineTo(x,y);
+                }
+                context.stroke();
+                
+            };
+            
+        </script>
+    </head>
+    <body>
+        <button onclick="go()">Go</button>
+    </body>
+</html>

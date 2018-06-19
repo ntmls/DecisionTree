@@ -96,7 +96,7 @@ describe("Decision Tree - ", function() {
         expect(columns[2].name).toBe("Windy");
     });
     
-    it("Create a tree from weather data", function() {
+    it("Must be able to create a classification tree.", function() {
         var data = getWeatherData();
         var columns = DT.getColumns(data, []);
         let options = {
@@ -109,7 +109,7 @@ describe("Decision Tree - ", function() {
         expect(tree.root).toBeDefined();
     });
     
-    it("Evaluate a tree", function() {
+    it("Evaluate a classification tree", function() {
         let data = getWeatherData();
         let columns = DT.getColumns(data, []);
         let options = {
@@ -125,7 +125,7 @@ describe("Decision Tree - ", function() {
         }); 
     });
     
-    it("Bootstrap Data", function() {
+    it("Must be able to bootstrap Data", function() {
         var data = getWeatherData();
         var sets = DT.bootstrapData(data, 100, 10);
         expect(sets.length).toBeDefined(); 
@@ -196,17 +196,17 @@ describe("Decision Tree - ", function() {
             attributes: 3,
             maxDepth: 10, 
             randomize: true,
-            splitCount: 10, 
-            random: createRandomGenerator(6789)
+            splitCount: 10,
+            random: createRandomGenerator(3455)
         };
         var forest = DT.createForest(data, "Play", options);
         var firstTree = forest.trees[0];
-        console.log(firstTree);
-        expect(firstTree.root.column.index).toBe(0);
-        expect(firstTree.root.right.splitValue).toBe(76.47565353592199);
+        //console.log(firstTree);
+        expect(firstTree.root.column.index).toBe(3);
+        expect(firstTree.root.right.splitValue).toBe(67.99720910973338);
     });
     
-        it("Most be able to load weather data file", function() {
+    it("Most be able to load weather data file", function() {
         var data;
         data = getWeatherData();
         expect(data).toBeDefined(); 
@@ -221,5 +221,24 @@ describe("Decision Tree - ", function() {
         console.log(data);
         expect(data.length).toBe(151);
     });
+    
+    it("Must be able to build a tree for regression.", function() {
+        var tree;
+        var data = getIrisData();
+        var options = {
+            maxDepth: 1000, 
+            randomize: true,
+            splitCount: 3,
+            minRows: 4,
+            random: createRandomGenerator(3731)  
+        };
+        var columns = DT.getColumns(data);
+        columns = DT.removeColumns(columns, ['']);
+        //console.log(columns);
+        tree = DT.createTree(data, columns, 'Sepal.Length', options);
+        console.log(tree);
+        expect(tree).toBeDefined();
+        expect(tree.root).toBeDefined();
+    }); 
     
 });

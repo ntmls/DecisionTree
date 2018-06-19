@@ -173,13 +173,13 @@
     };
     
     // Get all candidate partitions
-    var getPartitions = function(data, columns, target, parentGini, options) {
+    var getPartitions = function(data, columns, options) {
         let len = columns.length;
         let index = 0;
         var partitions = [];
         for (let i = 0; i < len; i++) {
             let column = columns[i];
-            let partition = getColumnPartition(data, column, target, parentGini, options);
+            let partition = getColumnPartition(data, column, options);
             if (partition !== undefined) {
                 partitions[index] = partition;
                 index++                
@@ -189,7 +189,7 @@
     };
     
     // Get the partitions for a given column based on data type and user specified options
-    var getColumnPartition = function(data, column, target, parentGini, options) {
+    var getColumnPartition = function(data, column, options) {
         var partition;
         if (column.isCategorical) {
            let values = countValues(data, column.values, column.index);
@@ -198,7 +198,7 @@
                 let partitions = new Array(vlen);
                 for (let j = 0; j < vlen; j++) {
                     let value = values[j];
-                    partitions[j] = split(data, column, value.value, target, parentGini);
+                    partitions[j] = split(data, column, value.value);
                 }
                 partition = getMaxGain(options.random, partitions);
             } else {
@@ -210,18 +210,18 @@
                 let partitions = new Array(options.splitCount);
                 for(let j=0; j < options.splitCount; j++) {
                     let r = (stats.max - stats.min) * options.random() + stats.min; 
-                    partitions[j] = split(data, column, r, target, parentGini);  
+                    partitions[j] = split(data, column, r);  
                 }
                 partition = getMaxGain(options.random, partitions);
             } else {
-                partition = split(data, column, stats.mean, target, parentGini);  
+                partition = split(data, column, stats.mean);  
             }
         }
         return partition;
     };  
     
     // given the data and a column split the data.
-    var split = function(data, column, value, target, parentGini) {
+    var split = function(data, column, value) {
         let left = [],
             right = [],
             len = data.length, 
@@ -236,50 +236,34 @@
                 right.push(data[i]);
             }
         }
-        let lgini = calcGini(left, target.values, target.index);
-        let rgini = calcGini(right, target.values, target.index);
-        let gini = (left.length / len) * lgini + (right.length / len) * rgini;
         
         return {
             column: column,
             value: value,
-            gini: gini,
-            gain: parentGini - gini,
             left: left,
             right: right
         };
     };
     
-    // Find the split with the maximium gain. 
-    // If there is a tie break it by picking at random.
-    var getMaxGain = function(rand, splits) {
-        let len = splits.length;
-        let maxSplit;
-        for(let i = 0; i < len; i++) {
-            if (splits[i] !== undefined) {
-                if (maxSplit === undefined) {
-                    maxSplit = splits[i];
-                } else {
-                    if (splits[i].gain > maxSplit.gain) {
-                        maxSplit = splits[i]; 
-                    } else if(splits[i].gain == maxSplit.gain) {
-                        if(rand() > .5) {
-                            maxSplit = splits[i];
-                        }
-                    }      
-                }
-            }
+    var calcGains = function(target, partitions, parentGini) {
+        var len = partitions.length;
+        var partition, lgini, rgini, gini;
+        for (var i = 0; i < len; i++) {
+            partition = partitions[i];
+            lgini = calcGini(partition.left, target.values, target.index);
+            rgini = calcGini(partition.right, target.values, target.index);
+            gini = (partition.left.length / len) * lgini + (partition.right.length / len) * rgini;
+            partition.gini = gini;
+            partition.gain = parentGini - gini;
         }
-        return maxSplit;
     };
     
-    var buildNodeFromData = function(data, columns, target, options, depth) {
+    var buildClassificationNode = function(data, columns, target, options, depth) {
         if (depth === undefined) { 
             depth = 0;
         }
         let maxDepth = options.maxDepth;
         let recordCount = data.length;
-        let gini = calcGini(data, target.values, target.index);
         let left = {};
         let right = {};
         let values = countValues(data, target.values, target.index);
@@ -287,8 +271,11 @@
         let shouldStop = true;
         if (maxDepth !== undefined && depth >= maxDepth) { 
             shouldStop = true; 
-        } else if (values.length > 1) {    
-            var partitions = getPartitions(data, columns, target, gini, options);
+        } else if (values.length > 1) {
+            let gini = calcGini(data, target.values, target.index);
+            var partitions = getPartitions(data, columns, options);
+            //console.log(partitions);
+            calcGains(target, partitions, gini);
             if (partitions.length > 0) {
                 shouldStop = false;
             }
@@ -313,8 +300,8 @@
             };
         } else {
             let partition = getMaxGain(options.random, partitions);
-            left = buildNodeFromData(partition.left, columns, target, options, depth + 1);
-            right = buildNodeFromData(partition.right, columns, target, options, depth + 1);  
+            left = buildClassificationNode(partition.left, columns, target, options, depth + 1);
+            right = buildClassificationNode(partition.right, columns, target, options, depth + 1);  
             return {
                 column: partition.column,
                 splitValue: partition.value,
@@ -325,11 +312,99 @@
         }
     }; 
     
+     var buildRegressionNode = function(data, columns, target, options, depth) {
+         if (depth === undefined) { 
+            depth = 0;
+        }
+        if (options.minRows === undefined) {
+            throw "'minRows' must be defined in options for regression trees";
+        }
+        let maxDepth = options.maxDepth;
+        let recordCount = data.length;
+        let left = {};
+        let right = {};
+        let stats = getVariance(data, target.index);
+        let parentVariance = stats.variance;
+        let shouldStop = true;
+        if (maxDepth !== undefined && depth >= maxDepth) { 
+            shouldStop = true; 
+        } else if (data.length <= options.minRows) {
+            shouldStop = true;
+        } else {
+            shouldStop = false;
+        }
+        //console.log(shouldStop);
+        if (shouldStop) {
+            return {
+                hasChildren: false,
+                mean: stats.mean,
+                variance: parentVariance,
+            };
+        } else {
+            //console.log(parentVariance);
+            let partitions = getPartitions(data, columns, options);
+            calcVarianceReductions(target, partitions, parentVariance);
+            let partition = getMaxReduction(options.random, partitions);
+
+            left = buildRegressionNode(partition.left, columns, target, options, depth + 1);
+            right = buildRegressionNode(partition.right, columns, target, options, depth + 1);  
+            return {
+                column: partition.column,
+                splitValue: partition.value,
+                hasChildren: !shouldStop,
+                left: left,
+                right: right
+            };
+        }
+    }; 
+    
+    var calcVarianceReductions = function(target, partitions, parentVariance) {
+        var len = partitions.length;
+        var lvar, rvar, partition;
+        for(let i=0; i < len; i++) {
+            partition = partitions[i];
+            lvar = getVariance(partition.left, target.index).variance;
+            rvar = getVariance(partition.right, target.index).variance;
+            partition.varianceReduction = parentVariance - (lvar + rvar);
+        }
+    };
+    
+    var getVariance = function(data, index) {
+        var len = data.length;
+        var sum = 0;
+        var delta = 0;
+        var variance = 0;
+        for(let i = 0; i < len; i++) {
+            sum += data[i][index];
+        }
+        var mean = sum / len;
+        for(let i = 0; i < len; i++) {
+            delta = (mean - data[i][index]);
+            variance += delta * delta;
+        }
+        return {
+            variance: variance / len,
+            mean: mean
+        };
+    };
+    
     var createTree = function(data, columns, className, options) {
+        var rows, root;
+        if (typeof className !== "string") {
+            throw "Expected 'className' argument to be a string";
+        }
+        if (options === undefined) {
+            throw "'options' are undefined.";
+        }
         if (options.random === undefined) {
             options.random = Math.random;
         }
-        var rows = data.slice(1);
+        if (options.randomize === true) {
+            if (options.splitCount === undefined) {
+                throw "'splitCount' must be specified if the 'randomizze' ooption is true.";
+            }
+        }
+        rows = data.slice(1);
         if (columns === undefined) { throw("columns are not defined"); }
         if (className === undefined) { throw("className is not defined"); }
         var _columns = randomColumns(
@@ -339,25 +414,78 @@
         var target = columns.filter(function(x) { 
             return x.name == className;
         })[0];
+        if (target.isCategorical) {
+            root = buildClassificationNode(rows, _columns, target, options, 0);
+        } else {
+            root = buildRegressionNode(rows, _columns, target, options, 0);
+        }
         return {
             target: target,
-            root: buildNodeFromData(rows, _columns, target, options, 0)
+            root: root
         };
     }; 
     
-    var evalNode = function(node, row) {
+    // Find the split with the maximium gain. 
+    // If there is a tie break it by picking at random.
+    var getMaxGain = function(rand, splits) {
+        let len = splits.length;
+        let maxSplit;
+        for(let i = 0; i < len; i++) {
+            if (splits[i] !== undefined) {
+                if (maxSplit === undefined) {
+                    maxSplit = splits[i];
+                } else {
+                    if (splits[i].gain > maxSplit.gain) {
+                        maxSplit = splits[i]; 
+                    } else if(splits[i].gain == maxSplit.gain) {
+                        if(rand() > .5) {
+                            maxSplit = splits[i];
+                        }
+                    }      
+                }
+            }
+        }
+        return maxSplit;
+    };
+    
+    var getMaxReduction = function(rand, splits) {
+        let len = splits.length;
+        let maxSplit;
+        for(let i = 0; i < len; i++) {
+            if (splits[i] !== undefined) {
+                if (maxSplit === undefined) {
+                    maxSplit = splits[i];
+                } else {
+                    if (splits[i].varianceReduction > maxSplit.varianceReduction) {
+                        maxSplit = splits[i]; 
+                    } else if(splits[i].varianceReduction == maxSplit.varianceReduction) {
+                        if(rand() > .5) {
+                            maxSplit = splits[i];
+                        }
+                    }      
+                }
+            }
+        }
+        return maxSplit; 
+    };
+    
+    var evalNode = function(node, row, isClassification) {
         if (!node.hasChildren) {
-            return node.values;
+            if (isClassification) {
+                return node.values;
+            } else {
+                return node.mean;
+            }
         }
         if (node.column.predicate(node.splitValue)(row)) {
-            return evalNode(node.left, row);
+            return evalNode(node.left, row, isClassification);
         } else {
-            return evalNode(node.right, row);
+            return evalNode(node.right, row, isClassification);
         }
     };
     
     var evalTree = function(tree, row) {
-        return evalNode(tree.root, row);  
+        return evalNode(tree.root, row, tree.target.isCategorical);  
     };
     
     var drawSample = function(rand, xs) {
@@ -399,6 +527,14 @@
     };
     
     var evalForest = function(forest, row) {
+        if (forest.target.isCategorical) {
+            return evalClassificationForest(forest, row);
+        } else {
+            return evalRegressionForest(forest, row);
+        }
+    }
+    
+    var evalClassificationForest = function(forest, row) {
         var idx = 0;
         var map = [];
         let len = forest.trees.length;
@@ -423,6 +559,16 @@
         return results.sort(function(a,b) {
             return b.probability - a.probability;
         });
+    };
+    
+    var evalRegressionForest = function(forest, row) {
+        let len = forest.trees.length;
+        let sum = 0;
+        for (let i=0; i < len; i++) {
+            var treeResult = evalTree(forest.trees[i], row); 
+            sum += treeResult;
+        }
+        return sum / len;
     };
     
     var exports = {
